@@ -29,3 +29,16 @@ npm run build:artifact  # eine einzelne HTML-Datei in dist-artifact/
 - Platzierungsspiele: max. 9 Games, kein Unentschieden – bei Gleichstand nach Zeitablauf muss der Golden-Point-Sieger gewählt werden.
 - Finalrunde wird erst nach allen 15 bestätigten Vorrundenspielen freigeschaltet. Gespeicherte Finalergebnisse enthalten die Team-IDs;
   ändert sich eine Paarung durch eine Korrektur, wird das alte Ergebnis als „veraltet“ markiert und nicht gewertet.
+
+## Zwei Handys gleichzeitig (Abgleich über GitHub)
+
+Die App läuft auf GitHub Pages: `https://tigraef.github.io/Padel-Turnier/`.
+Die Ergebnisse liegen zusätzlich in `turnier.json` auf dem Branch `turnier-daten` und werden alle paar Sekunden abgeglichen
+(pro Eintrag gewinnt die jüngere Änderung, Löschungen und „Zurücksetzen“ werden mit übertragen).
+
+Einrichten (einmalig):
+1. Repository öffentlich machen (GitHub Pages ist für private Repos nur mit GitHub Pro verfügbar).
+2. Settings → Pages → Source: **GitHub Actions**. Danach baut der Workflow `pages.yml` die App bei jedem Push.
+3. Fine-grained Token anlegen: GitHub → Settings → Developer settings → Fine-grained tokens →
+   Repository access „Only select repositories: Padel-Turnier“, Permissions → Contents: **Read and write**, Ablauf z. B. 7 Tage.
+4. Auf beiden Handys die App öffnen → „Lokal“ oben rechts antippen → Token einfügen → Verbinden.

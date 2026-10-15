@@ -8,6 +8,7 @@ export const initialState = () => ({
   results: {}, // matchId -> { a, b, confirmed }
   finals: {}, // finalId -> { teamA, teamB, a, b, golden, confirmed }
   manualTies: {}, // tieKey -> [teamId, ...]
+  stamps: {}, // 'section/key' -> Zeitstempel der letzten Änderung (für den Abgleich zwischen Geräten)
   showPlayers: false,
   timer: { running: false, endsAt: null, remaining: ROUND_MS },
 });

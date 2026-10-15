@@ -23,6 +23,7 @@ import {
   exportText,
 } from './logic.js';
 import { useTournamentStore, initialState, parseBackup, ROUND_MS } from './store.js';
+import { applyChange, clearAll, replaceAll, pickShared, useGitHubSync, testConnection, DEFAULT_SYNC } from './sync.js';
 
 const TABS = [
   { id: 'start', label: 'Übersicht', icon: 'home' },
@@ -72,27 +73,11 @@ export default function App() {
   const { results, finals, manualTies, showPlayers } = state;
 
   const update = (patch) => setState((s) => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }));
-  const setResult = (id, value) =>
-    update((s) => {
-      const next = { ...s.results };
-      if (value == null) delete next[id];
-      else next[id] = value;
-      return { results: next };
-    });
-  const setFinal = (id, value) =>
-    update((s) => {
-      const next = { ...s.finals };
-      if (value == null) delete next[id];
-      else next[id] = value;
-      return { finals: next };
-    });
-  const setManualTie = (key, ids) =>
-    update((s) => {
-      const next = { ...s.manualTies };
-      if (ids == null) delete next[key];
-      else next[key] = ids;
-      return { manualTies: next };
-    });
+  const change = (section) => (key, value) => setState((s) => ({ ...s, ...applyChange(pickShared(s), section, key, value) }));
+  const setResult = change('results');
+  const setFinal = change('finals');
+  const setManualTie = change('manualTies');
+  const sync = useGitHubSync(state, setState);
 
   const ctx = { state, results, finals, manualTies, showPlayers, setResult, setFinal, setManualTie, setTab, update };
   const round = currentRound(results);
@@ -118,6 +103,7 @@ export default function App() {
             <span className="switch-track" aria-hidden="true" />
             <span className="switch-label">Spieler</span>
           </label>
+          {!inFrame && <SyncBadge status={sync.status} onClick={() => setSheet('sync')} />}
         </div>
       </header>
 
@@ -145,6 +131,8 @@ export default function App() {
             }}
             onExport={() => setSheet('export')}
             onReset={() => setSheet('reset')}
+            onSync={inFrame ? null : () => setSheet('sync')}
+            syncOn={!!sync.config.token}
           />
         )}
         {tab === 'spielplan' && <Schedule {...ctx} round={round} planRound={planRound} setPlanRound={setPlanRound} />}
@@ -169,12 +157,13 @@ export default function App() {
         </div>
       </nav>
 
-      {sheet === 'export' && <ExportSheet state={state} onClose={() => setSheet(null)} onRestore={(s) => setState(s)} />}
+      {sheet === 'export' && <ExportSheet state={state} onClose={() => setSheet(null)} onRestore={(s) => setState((cur) => ({ ...cur, ...replaceAll(pickShared(cur), s) }))} />}
+      {sheet === 'sync' && <SyncSheet sync={sync} onClose={() => setSheet(null)} />}
       {sheet === 'reset' && (
         <ResetDialog
           onCancel={() => setSheet(null)}
           onConfirm={() => {
-            setState({ ...initialState(), showPlayers: state.showPlayers });
+            setState((cur) => ({ ...initialState(), showPlayers: cur.showPlayers, ...clearAll(pickShared(cur)) }));
             setSheet(null);
             setTab('start');
           }}
@@ -188,7 +177,7 @@ export default function App() {
 
 /* ---------------- Dashboard ---------------- */
 
-function Dashboard({ results, finals, manualTies, showPlayers, state, update, round, scheduleCheck, onOpenPlan, onExport, onReset }) {
+function Dashboard({ results, finals, manualTies, showPlayers, state, update, round, scheduleCheck, onOpenPlan, onExport, onReset, onSync, syncOn }) {
   const progress = groupProgress(results);
   const ranking = finalRanking(results, finals, manualTies);
   const finalsDone = FINALS.filter((f) => ranking.pairings.unlocked && finalMatchState(ranking.pairings.pairings[f.id], finals[f.id]).status === 'confirmed').length;
@@ -301,8 +290,16 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
       </section>
 
       <section className="stack">
-        <SectionHead title="Verwaltung" note="Ergebnisse werden automatisch auf diesem Gerät gespeichert" />
+        <SectionHead
+          title="Verwaltung"
+          note={syncOn ? 'Ergebnisse werden mit dem zweiten Handy abgeglichen' : 'Ergebnisse werden automatisch auf diesem Gerät gespeichert'}
+        />
         <div className="btn-row">
+          {onSync && (
+            <button className="btn btn-ghost" onClick={onSync}>
+              <Icon name="sync" /> {syncOn ? 'Abgleich' : 'Zweites Handy verbinden'}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={onExport}>
             <Icon name="share" /> Exportieren{inFrame ? '' : ' / Drucken'}
           </button>
@@ -1123,6 +1120,96 @@ function Modal({ title, children, onClose }) {
   );
 }
 
+/* ---------------- Abgleich ---------------- */
+
+function SyncBadge({ status, onClick }) {
+  const label = { off: 'Lokal', syncing: 'Sync …', ok: 'Sync', offline: 'Offline', error: 'Sync-Fehler' }[status.state];
+  return (
+    <button className={`sync-badge sync-${status.state}`} onClick={onClick} aria-label={`Abgleich: ${label}`}>
+      <span className="sync-dot" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+function SyncSheet({ sync, onClose }) {
+  const { config, setConfig, status, syncNow } = sync;
+  const [token, setToken] = useState(config.token);
+  const [check, setCheck] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const ago = status.at ? Math.max(0, Math.round((Date.now() - status.at) / 1000)) : null;
+
+  const connect = async () => {
+    setBusy(true);
+    setCheck(null);
+    try {
+      await testConnection({ ...config, token });
+      setConfig({ ...config, token: token.trim() });
+      setCheck({ ok: true, text: 'Verbunden. Ergebnisse werden jetzt abgeglichen.' });
+    } catch (e) {
+      setCheck({ ok: false, text: e instanceof TypeError ? 'Keine Verbindung zu GitHub.' : e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Zweites Handy verbinden" onClose={onClose}>
+      <p className="small">
+        Beide Handys speichern die Ergebnisse zusätzlich in der Datei <code>{config.path}</code> im Repository{' '}
+        <strong>
+          {config.owner}/{config.repo}
+        </strong>{' '}
+        (Branch <code>{config.branch}</code>). Änderungen erscheinen nach wenigen Sekunden auf dem anderen Handy.
+      </p>
+      {config.token && (
+        <div className={`alert ${status.state === 'error' ? 'alert-danger' : ''}`}>
+          <strong>Status:</strong>{' '}
+          {status.state === 'ok' && `abgeglichen${ago != null ? ` vor ${ago} s` : ''}`}
+          {status.state === 'syncing' && 'gleiche ab …'}
+          {(status.state === 'offline' || status.state === 'error') && status.error}{' '}
+          <button className="link" onClick={() => syncNow()}>
+            Jetzt abgleichen
+          </button>
+        </div>
+      )}
+      <label className="small" htmlFor="sync-token">
+        GitHub-Token (Fine-grained, nur Repository „{config.repo}“, Contents: Read and write)
+      </label>
+      <input
+        id="sync-token"
+        className="text-input"
+        type="password"
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        placeholder="github_pat_…"
+        value={token}
+        onChange={(e) => setToken(e.target.value)}
+      />
+      {check && <p className={`small ${check.ok ? 'ok-text' : 'error-text'}`}>{check.text}</p>}
+      <div className="btn-row">
+        <button className="btn btn-primary" disabled={!token.trim() || busy} onClick={connect}>
+          {busy ? 'Prüfe …' : config.token ? 'Token speichern' : 'Verbinden'}
+        </button>
+        {config.token && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setConfig({ ...DEFAULT_SYNC, token: '' });
+              setToken('');
+              setCheck(null);
+            }}
+          >
+            Trennen
+          </button>
+        )}
+      </div>
+      <p className="muted small">Der Token bleibt nur auf diesem Handy gespeichert. Nach dem Turnier kannst du ihn auf GitHub löschen.</p>
+    </Modal>
+  );
+}
+
 /* ---------------- Kleinteile ---------------- */
 
 function SectionHead({ title, note }) {
@@ -1169,6 +1256,7 @@ function Icon({ name }) {
     share: 'M12 4v12M7 9l5-5 5 5M5 14v6h14v-6',
     reset: 'M4 12a8 8 0 1 0 3-6.2M4 4v4h4',
     lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
+    sync: 'M20 11a8 8 0 0 0-14.3-4.9M4 5v4h4M4 13a8 8 0 0 0 14.3 4.9M20 19v-4h-4',
   };
   return (
     <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">

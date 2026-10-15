@@ -37,3 +37,15 @@ test('Abgleich: Backup ersetzt alles', () => {
   assert.deepEqual(Object.keys(restored.results), ['r3-D8']);
   assert.deepEqual(Object.keys(mergeShared(a, restored).results), ['r3-D8']);
 });
+
+test('Ansicht zeigt nur bestätigte Ergebnisse', async () => {
+  const { publicView } = await import('../src/sync.js');
+  const v = publicView({
+    results: { 'r1-D6': { a: 5, b: 3, confirmed: true }, 'r1-D7': { a: 2, b: 1, confirmed: false } },
+    finals: { final: { teamA: 'x', teamB: 'y', a: 3, b: 3, golden: null, confirmed: false } },
+    manualTies: { k: ['a', 'b'] },
+  });
+  assert.deepEqual(Object.keys(v.results), ['r1-D6']);
+  assert.deepEqual(v.finals, {});
+  assert.deepEqual(v.manualTies, { k: ['a', 'b'] });
+});

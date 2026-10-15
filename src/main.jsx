@@ -7,6 +7,6 @@ document.documentElement.lang = 'de';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <App readOnly={new URLSearchParams(location.search).has('ansicht')} />
   </StrictMode>,
 );

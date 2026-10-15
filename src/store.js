@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const KEY = 'padel-hanse-2026-10-16';
+export const VIEW_KEY = 'padel-hanse-2026-10-16-ansicht';
 export const ROUND_MS = 20 * 60 * 1000;
 
 export const initialState = () => ({
@@ -13,9 +14,9 @@ export const initialState = () => ({
   timer: { running: false, endsAt: null, remaining: ROUND_MS },
 });
 
-function load() {
+function load(key) {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return initialState();
     const parsed = JSON.parse(raw);
     return { ...initialState(), ...parsed };
@@ -24,15 +25,15 @@ function load() {
   }
 }
 
-export function useTournamentStore() {
-  const [state, setState] = useState(load);
+export function useTournamentStore(key = KEY) {
+  const [state, setState] = useState(() => load(key));
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(state));
+      localStorage.setItem(key, JSON.stringify(state));
     } catch {
       /* Speicher nicht verfügbar – App läuft trotzdem weiter */
     }
-  }, [state]);
+  }, [key, state]);
   return [state, setState];
 }
 

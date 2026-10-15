@@ -316,3 +316,73 @@ export async function testConnection(cfg) {
   if (repo.permissions && !repo.permissions.push) throw new SyncError('Token darf nicht schreiben (Contents: Read and write nötig).', 403);
   return true;
 }
+
+// ---------- Nur-Ansicht für Teilnehmer (ohne Token) ----------
+
+/** Für die Ansicht nur bestätigte Ergebnisse übernehmen. */
+export function publicView(data) {
+  const keep = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v && v.confirmed));
+  return { results: keep(data?.results), finals: keep(data?.finals), manualTies: data?.manualTies || {} };
+}
+
+const VIEW_POLL_MS = 15000;
+
+/**
+ * Liest den Turnierstand ohne Token. Bedingte Anfragen (ETag) zählen bei GitHub nicht
+ * gegen das Limit von 60 Anfragen pro Stunde; bei erreichtem Limit wird auf
+ * raw.githubusercontent.com ausgewichen (dort bis zu 5 Minuten Verzögerung).
+ */
+export function useViewerFeed(setState, cfg = DEFAULT_SYNC) {
+  const [status, setStatus] = useState({ state: 'syncing', at: null, error: null });
+  const etag = useRef(null);
+
+  const refresh = useCallback(async () => {
+    const apply = (data) => setState((s) => ({ ...s, ...publicView(data) }));
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${encodeURIComponent(cfg.branch)}`,
+        { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', ...(etag.current ? { 'If-None-Match': etag.current } : {}) } },
+      );
+      if (res.status === 304) {
+        setStatus({ state: 'ok', at: Date.now(), error: null });
+        return;
+      }
+      if (res.ok) {
+        etag.current = res.headers.get('ETag');
+        const json = await res.json();
+        apply(JSON.parse(decodeBase64(json.content)));
+        setStatus({ state: 'ok', at: Date.now(), error: null });
+        return;
+      }
+      if (res.status === 404) {
+        apply({});
+        setStatus({ state: 'ok', at: Date.now(), error: null });
+        return;
+      }
+      const raw = await fetch(
+        `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cfg.path}?t=${Date.now()}`,
+        { cache: 'no-store' },
+      );
+      if (!raw.ok) throw new Error(`Status ${raw.status}`);
+      apply(await raw.json());
+      setStatus({ state: 'ok', at: Date.now(), error: 'Aktualisierung kann einige Minuten dauern.' });
+    } catch (e) {
+      setStatus((s) => ({ ...s, state: 'offline', error: 'Keine Verbindung – zeige letzten Stand.' }));
+    }
+  }, [cfg.owner, cfg.repo, cfg.branch, cfg.path, setState]);
+
+  useEffect(() => {
+    refresh();
+    const tick = () => document.visibilityState === 'visible' && refresh();
+    const interval = setInterval(tick, VIEW_POLL_MS);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('online', tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('online', tick);
+    };
+  }, [refresh]);
+
+  return { status, refresh };
+}

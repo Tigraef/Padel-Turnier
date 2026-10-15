@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TOURNAMENT,
   TEAMS,
@@ -22,8 +22,12 @@ import {
   formatDiff,
   exportText,
 } from './logic.js';
-import { useTournamentStore, initialState, parseBackup, ROUND_MS } from './store.js';
-import { applyChange, clearAll, replaceAll, pickShared, useGitHubSync, testConnection, DEFAULT_SYNC } from './sync.js';
+import { useTournamentStore, initialState, parseBackup, ROUND_MS, VIEW_KEY } from './store.js';
+import { applyChange, clearAll, replaceAll, pickShared, useGitHubSync, useViewerFeed, testConnection, DEFAULT_SYNC } from './sync.js';
+
+// Nur-Ansicht für Teilnehmer: …/Padel-Turnier/?ansicht
+const ReadOnly = createContext(false);
+const viewerUrl = () => `${location.origin}${location.pathname}?ansicht`;
 
 const TABS = [
   { id: 'start', label: 'Übersicht', icon: 'home' },
@@ -47,8 +51,8 @@ function readHash() {
   return TABS.some((t) => t.id === h) ? h : 'start';
 }
 
-export default function App() {
-  const [state, setState] = useTournamentStore();
+export default function App({ readOnly = false }) {
+  const [state, setState] = useTournamentStore(readOnly ? VIEW_KEY : undefined);
   const [tab, setTabState] = useState(readHash);
   const [planRound, setPlanRound] = useState(null);
   const [sheet, setSheet] = useState(null); // 'export' | 'reset' | null
@@ -77,13 +81,15 @@ export default function App() {
   const setResult = change('results');
   const setFinal = change('finals');
   const setManualTie = change('manualTies');
-  const sync = useGitHubSync(state, setState);
+  // readOnly ändert sich während der Laufzeit nie, daher ist der bedingte Hook-Aufruf stabil.
+  const sync = readOnly ? useViewerFeed(setState) : useGitHubSync(state, setState);
 
   const ctx = { state, results, finals, manualTies, showPlayers, setResult, setFinal, setManualTie, setTab, update };
   const round = currentRound(results);
 
   return (
-    <div className="app">
+    <ReadOnly.Provider value={readOnly}>
+    <div className={`app ${readOnly ? 'is-readonly' : ''}`}>
       <header className="topbar">
         <div className="topbar-inner">
           <button className="brand" onClick={() => setTab('start')} aria-label="Zur Übersicht">
@@ -103,7 +109,11 @@ export default function App() {
             <span className="switch-track" aria-hidden="true" />
             <span className="switch-label">Spieler</span>
           </label>
-          {!inFrame && <SyncBadge status={sync.status} onClick={() => setSheet('sync')} />}
+          {readOnly ? (
+            <LiveBadge status={sync.status} onClick={sync.refresh} />
+          ) : (
+            !inFrame && <SyncBadge status={sync.status} onClick={() => setSheet('sync')} />
+          )}
         </div>
       </header>
 
@@ -132,13 +142,14 @@ export default function App() {
             onExport={() => setSheet('export')}
             onReset={() => setSheet('reset')}
             onSync={inFrame ? null : () => setSheet('sync')}
-            syncOn={!!sync.config.token}
+            setTab={setTab}
+            syncOn={!!sync.config?.token}
           />
         )}
         {tab === 'spielplan' && <Schedule {...ctx} round={round} planRound={planRound} setPlanRound={setPlanRound} />}
         {tab === 'tabelle' && <Standings {...ctx} round={round} />}
         {tab === 'finale' && <Finals {...ctx} />}
-        {tab === 'ehrung' && <Awards {...ctx} onExport={() => setSheet('export')} />}
+        {tab === 'ehrung' && <Awards {...ctx} onExport={readOnly ? null : () => setSheet('export')} />}
       </main>
 
       <nav className="tabbar" aria-label="Bereiche">
@@ -172,12 +183,14 @@ export default function App() {
 
       <pre className="print-only print-report">{exportText(state)}</pre>
     </div>
+    </ReadOnly.Provider>
   );
 }
 
 /* ---------------- Dashboard ---------------- */
 
-function Dashboard({ results, finals, manualTies, showPlayers, state, update, round, scheduleCheck, onOpenPlan, onExport, onReset, onSync, syncOn }) {
+function Dashboard({ results, finals, manualTies, showPlayers, state, update, round, scheduleCheck, onOpenPlan, onExport, onReset, onSync, syncOn, setTab }) {
+  const readOnly = useContext(ReadOnly);
   const progress = groupProgress(results);
   const ranking = finalRanking(results, finals, manualTies);
   const finalsDone = FINALS.filter((f) => ranking.pairings.unlocked && finalMatchState(ranking.pairings.pairings[f.id], finals[f.id]).status === 'confirmed').length;
@@ -221,9 +234,15 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
           <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={15} aria-valuenow={progress.confirmed}>
             <div className="bar-fill" style={{ width: `${(progress.confirmed / progress.total) * 100}%` }} />
           </div>
-          <button className="btn btn-ball btn-block" onClick={() => onOpenPlan(round)}>
-            {round === 'finals' ? 'Platzierungsspiele eintragen' : `Ergebnisse Runde ${round} erfassen`}
-          </button>
+          {readOnly ? (
+            <button className="btn btn-ball btn-block" onClick={() => setTab('tabelle')}>
+              Zur Live-Tabelle
+            </button>
+          ) : (
+            <button className="btn btn-ball btn-block" onClick={() => onOpenPlan(round)}>
+              {round === 'finals' ? 'Platzierungsspiele eintragen' : `Ergebnisse Runde ${round} erfassen`}
+            </button>
+          )}
         </div>
       </section>
 
@@ -260,7 +279,7 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
         </section>
       )}
 
-      {round !== 'finals' && <RoundTimer timer={state.timer} round={round} onChange={(timer) => update({ timer })} />}
+      {!readOnly && round !== 'finals' && <RoundTimer timer={state.timer} round={round} onChange={(timer) => update({ timer })} />}
 
       <section className="stack">
         <SectionHead title="Teams" />
@@ -274,6 +293,7 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
         </ul>
       </section>
 
+      {!readOnly && (
       <section className="stack">
         <SectionHead title="Spielplanprüfung" note={scheduleCheck.ok ? 'Alles in Ordnung' : 'Fehler gefunden'} />
         <ul className="checks">
@@ -288,7 +308,13 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
           ))}
         </ul>
       </section>
+      )}
 
+      {readOnly && (
+        <p className="muted small center">Live-Ansicht · Ergebnisse erscheinen, sobald die Turnierleitung sie bestätigt.</p>
+      )}
+
+      {!readOnly && (
       <section className="stack">
         <SectionHead
           title="Verwaltung"
@@ -307,7 +333,9 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
             <Icon name="reset" /> Turnier zurücksetzen
           </button>
         </div>
+        {!inFrame && syncOn && <ViewerLink />}
       </section>
+      )}
     </div>
   );
 }
@@ -509,6 +537,8 @@ function matchStatus(result) {
 }
 
 function GroupMatchCard({ match, result, showPlayers, onChange }) {
+  const readOnly = useContext(ReadOnly);
+  if (readOnly) return <ViewMatchCard court={match.court} home={match.home} away={match.away} result={result} showPlayers={showPlayers} />;
   const status = matchStatus(result);
   const confirmed = isConfirmedGroup(result);
   const a = result?.a ?? null;
@@ -606,6 +636,7 @@ function Stepper({ value, max, onChange, label }) {
 /* ---------------- Tabelle ---------------- */
 
 function Standings({ results, manualTies, setManualTie, showPlayers, round }) {
+  const readOnly = useContext(ReadOnly);
   const lastWithResults = useMemo(() => {
     let r = 1;
     for (const m of SCHEDULE) if (isConfirmedGroup(results[m.id])) r = Math.max(r, m.round);
@@ -697,11 +728,15 @@ function Standings({ results, manualTies, setManualTie, showPlayers, round }) {
         </section>
       )}
 
-      {st.unresolved.map((g) => (
+      {readOnly && st.unresolved.length > 0 && (
+        <p className="alert">Gleichstand nach allen Kriterien – die Turnierleitung entscheidet die Reihenfolge.</p>
+      )}
+
+      {!readOnly && st.unresolved.map((g) => (
         <TieDecision key={g.key} group={g} rows={st.rows} onSave={(ids) => setManualTie(g.key, ids)} />
       ))}
 
-      {[...new Set(st.rows.filter((r) => r.decidedBy === 'manual').map((r) => r.tieKey))].map((key) => (
+      {!readOnly && [...new Set(st.rows.filter((r) => r.decidedBy === 'manual').map((r) => r.tieKey))].map((key) => (
         <div key={key} className="alert">
           Manuelle Reihenfolge festgelegt für{' '}
           {st.rows
@@ -758,6 +793,7 @@ function TieDecision({ group, rows, onSave }) {
 /* ---------------- Finalrunde ---------------- */
 
 function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) {
+  const readOnly = useContext(ReadOnly);
   const ranking = finalRanking(results, finals, manualTies);
   const fp = ranking.pairings;
   const progress = groupProgress(results);
@@ -780,7 +816,7 @@ function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) 
                 <div className="bar-fill" style={{ width: `${(progress.confirmed / progress.total) * 100}%` }} />
               </div>
             )}
-            {fp.blocking.length > 0 && (
+            {fp.blocking.length > 0 && !readOnly && (
               <button className="btn btn-primary" onClick={() => setTab('tabelle')}>
                 Zur Tabelle
               </button>
@@ -838,8 +874,24 @@ function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) 
 }
 
 function FinalMatchCard({ final, pairing, stored, showPlayers, onChange }) {
+  const readOnly = useContext(ReadOnly);
   const st = finalMatchState(pairing, stored);
   const { teamA, teamB } = pairing;
+  if (readOnly) {
+    const done = st.status === 'confirmed';
+    return (
+      <ViewMatchCard
+        court={final.court}
+        label={final.label}
+        home={teamA}
+        away={teamB}
+        result={done ? { a: st.a, b: st.b, confirmed: true } : null}
+        winner={done ? st.winner : null}
+        golden={done && st.a === st.b ? st.golden : null}
+        showPlayers={showPlayers}
+      />
+    );
+  }
 
   if (st.status === 'stale') {
     return (
@@ -986,9 +1038,11 @@ function Awards({ results, finals, manualTies, showPlayers, setTab, onExport }) 
         ))}
       </ol>
       <p className="muted small center">Herzlichen Glückwunsch an alle sechs Teams – danke fürs Mitspielen!</p>
-      <button className="btn btn-ghost btn-block" onClick={onExport}>
-        <Icon name="share" /> Ergebnisse exportieren
-      </button>
+      {!onExport ? null : (
+        <button className="btn btn-ghost btn-block" onClick={onExport}>
+          <Icon name="share" /> Ergebnisse exportieren
+        </button>
+      )}
     </div>
   );
 }
@@ -1207,6 +1261,73 @@ function SyncSheet({ sync, onClose }) {
       </div>
       <p className="muted small">Der Token bleibt nur auf diesem Handy gespeichert. Nach dem Turnier kannst du ihn auf GitHub löschen.</p>
     </Modal>
+  );
+}
+
+function LiveBadge({ status, onClick }) {
+  const label = status.state === 'offline' ? 'Offline' : 'Live';
+  return (
+    <button className={`sync-badge sync-${status.state === 'ok' ? 'ok' : status.state}`} onClick={onClick} aria-label="Stand aktualisieren">
+      <span className="sync-dot" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+function ViewerLink() {
+  const [copied, setCopied] = useState(false);
+  const url = viewerUrl();
+  return (
+    <div className="viewer-link">
+      <p className="small">
+        <strong>Link für die Teilnehmer</strong> (nur ansehen, ohne Token):
+      </p>
+      <input id="viewer-url" className="text-input" readOnly value={url} onFocus={(e) => e.target.select()} />
+      <button
+        className="btn btn-ghost"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+          } catch {
+            document.getElementById('viewer-url')?.select();
+          }
+        }}
+      >
+        {copied ? 'Kopiert ✓' : 'Link kopieren'}
+      </button>
+    </div>
+  );
+}
+
+function ViewMatchCard({ court, label, home, away, result, winner, golden, showPlayers }) {
+  const done = isConfirmedGroup(result) || (result?.confirmed && result.a != null);
+  const a = done ? result.a : null;
+  const b = done ? result.b : null;
+  const win = winner ?? (done && a !== b ? (a > b ? home : away) : null);
+  return (
+    <article className={`match status-${done ? 'done' : 'open'}`}>
+      <header className="match-head">
+        <CourtBadge court={court} />
+        {label && <span className="final-label">{label}</span>}
+        <StatusChip status={done ? 'done' : 'open'} />
+      </header>
+      <div className="match-body">
+        {[
+          [home, a],
+          [away, b],
+        ].map(([id, score]) => (
+          <div key={id} className={`team-score ${win === id ? 'is-winner' : ''}`}>
+            <div className="team-score-name">
+              <span className="team-name">{TEAM_BY_ID[id].name}</span>
+              {showPlayers && <span className="players">{TEAM_BY_ID[id].players.join(' & ')}</span>}
+              {golden === id && <span className="tag">Golden Point</span>}
+            </div>
+            <span className="score-locked num">{score ?? '–'}</span>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 

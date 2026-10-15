@@ -42,3 +42,8 @@ Einrichten (einmalig):
 3. Fine-grained Token anlegen: GitHub → Settings → Developer settings → Fine-grained tokens →
    Repository access „Only select repositories: Padel-Turnier“, Permissions → Contents: **Read and write**, Ablauf z. B. 7 Tage.
 4. Auf beiden Handys die App öffnen → „Lokal“ oben rechts antippen → Token einfügen → Verbinden.
+
+## Live-Ansicht für Teilnehmer
+
+`https://tigraef.github.io/Padel-Turnier/?ansicht` – ohne Token, nur lesen. Zeigt ausschließlich bestätigte Ergebnisse,
+aktualisiert sich alle 15 Sekunden (bedingte Anfragen mit ETag, die nicht gegen GitHubs Limit zählen).

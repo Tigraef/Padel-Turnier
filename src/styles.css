@@ -1482,3 +1482,10 @@ code {
     gap: 6px;
   }
 }
+.viewer-link {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--court-tint);
+}

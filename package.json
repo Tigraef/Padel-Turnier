@@ -1,0 +1,30 @@
+{
+  "name": "padel-turnier",
+  "version": "1.0.0",
+  "description": "Padel-Turnier-App für Hanse Padel am 16.10.2026",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "node --test tests/*.test.js",
+    "build:artifact": "vite build && node scripts/inline-build.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tigraef/Padel-Turnier.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tigraef/Padel-Turnier/issues"
+  },
+  "homepage": "https://github.com/Tigraef/Padel-Turnier#readme",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
+  },
+  "private": true,
+  "type": "module"
+}

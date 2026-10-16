@@ -47,3 +47,9 @@ Einrichten (einmalig):
 
 `https://tigraef.github.io/Padel-Turnier/?ansicht` – ohne Token, nur lesen. Zeigt ausschließlich bestätigte Ergebnisse,
 aktualisiert sich alle 15 Sekunden (bedingte Anfragen mit ETag, die nicht gegen GitHubs Limit zählen).
+
+## iPad-Version für alte Geräte
+
+`https://tigraef.github.io/Padel-Turnier/ipad/` (Teilnehmer-Ansicht: `…/ipad/?ansicht`) – dieselbe App,
+aber als reines ES5 mit Polyfills (ab iOS 9) gebaut (`npm run build:ipad`, Konfiguration `vite.ipad.config.js`).
+Die normale App bleibt davon unberührt.

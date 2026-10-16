@@ -1,0 +1,125 @@
+/* Nur iPad-Version: Ausweichwerte für alte Safari-Versionen, die
+   max()/clamp()/env(), Flexbox-gap oder CSS Grid nicht kennen. */
+
+.wrap,
+.topbar-inner {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.main {
+  padding-bottom: 104px;
+}
+.topbar {
+  position: -webkit-sticky;
+  position: sticky;
+}
+.hero-title {
+  font-size: 40px;
+}
+.podium-name {
+  font-size: 18px;
+}
+.modal {
+  padding: 18px;
+}
+
+/* Tab-Leiste ohne Grid */
+.tabbar-inner {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+}
+.tab {
+  -webkit-box-flex: 1;
+  -webkit-flex: 1 1 0;
+  flex: 1 1 0;
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+/* Abstände ohne gap */
+.stack > * + *,
+.match-list > * + *,
+.notes > * + *,
+.checks > * + *,
+.preview-list > * + *,
+.tie-list > * + *,
+.court-tile-teams > * + *,
+.golden > * + *,
+.viewer-link > * + *,
+.locked > div > * + *,
+.timer > * + *,
+.hero-body > * + * {
+  margin-top: 12px;
+}
+.stack-lg > * + * {
+  margin-top: 28px;
+}
+.btn-row > *,
+.timer-actions > *,
+.golden-btns > *,
+.tie-btns > *,
+.seg > * {
+  margin-right: 8px;
+  margin-bottom: 6px;
+}
+.stepper > * + * {
+  margin-left: 6px;
+}
+.team-score-name,
+.tile-team-name,
+.brand-text {
+  margin-right: 10px;
+}
+.court-tile-head > * + *,
+.match-head > * + *,
+.brand > * + *,
+.switch > * + *,
+.sync-badge > * + *,
+.btn > * + *,
+.checks li > * + *,
+.preview-list li > * + *,
+.tie-list li > * + *,
+.final-list li > * + *,
+.locked > * + * {
+  margin-left: 8px;
+}
+.section-head > * + *,
+.round-head > * + * {
+  margin-left: 12px;
+}
+.topbar-inner .switch {
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+/* Courts: ohne Grid untereinander */
+.court-row > * + * {
+  margin-top: 10px;
+}
+@supports (display: grid) {
+  .court-row > * + * {
+    margin-top: 0;
+  }
+}
+
+/* Siegerpodest ohne Grid */
+.podium {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: flex-end;
+  align-items: flex-end;
+}
+.podium-col {
+  -webkit-flex: 1 1 0;
+  flex: 1 1 0;
+  margin: 0 4px;
+}

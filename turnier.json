@@ -3,6 +3,25 @@
  "results": {},
  "finals": {},
  "manualTies": {},
- "stamps": {},
- "savedAt": "2026-10-15T15:11:32.941Z"
+ "stamps": {
+  "results/r1-D6": 1792080117771,
+  "results/r1-D7": 1792080117771,
+  "results/r1-D8": 1792080117771,
+  "results/r2-D6": 1792080117771,
+  "results/r2-D7": 1792080117771,
+  "results/r2-D8": 1792080117771,
+  "results/r3-D6": 1792080117771,
+  "results/r3-D7": 1792080117771,
+  "results/r3-D8": 1792080117771,
+  "results/r4-D6": 1792080117771,
+  "results/r4-D7": 1792080117771,
+  "results/r4-D8": 1792080117771,
+  "results/r5-D6": 1792080117771,
+  "results/r5-D7": 1792080117771,
+  "results/r5-D8": 1792080117771,
+  "finals/final": 1792080117771,
+  "finals/p3": 1792080117771,
+  "finals/p5": 1792080117771
+ },
+ "savedAt": "2026-10-16T11:08:04.044Z"
 }

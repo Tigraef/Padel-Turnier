@@ -5,29 +5,124 @@
    "a": 6,
    "b": 2,
    "confirmed": true
+  },
+  "r1-D7": {
+   "a": 5,
+   "b": 3,
+   "confirmed": true
+  },
+  "r1-D6": {
+   "a": 5,
+   "b": 3,
+   "confirmed": true
+  },
+  "r2-D8": {
+   "a": 6,
+   "b": 2,
+   "confirmed": true
+  },
+  "r2-D7": {
+   "a": 4,
+   "b": 4,
+   "confirmed": true
+  },
+  "r2-D6": {
+   "a": 5,
+   "b": 2,
+   "confirmed": true
+  },
+  "r3-D8": {
+   "a": 3,
+   "b": 5,
+   "confirmed": true
+  },
+  "r3-D6": {
+   "a": 4,
+   "b": 4,
+   "confirmed": true
+  },
+  "r3-D7": {
+   "a": 2,
+   "b": 6,
+   "confirmed": true
+  },
+  "r4-D7": {
+   "a": 3,
+   "b": 5,
+   "confirmed": true
+  },
+  "r4-D6": {
+   "a": 4,
+   "b": 4,
+   "confirmed": true
+  },
+  "r4-D8": {
+   "a": 8,
+   "b": 0,
+   "confirmed": true
+  },
+  "r5-D8": {
+   "a": 2,
+   "b": 6,
+   "confirmed": true
+  },
+  "r5-D6": {
+   "a": 1,
+   "b": 7,
+   "confirmed": true
+  },
+  "r5-D7": {
+   "a": 4,
+   "b": 4,
+   "confirmed": true
   }
  },
- "finals": {},
+ "finals": {
+  "final": {
+   "teamA": "hansel",
+   "teamB": "schmetterlinge",
+   "a": 5,
+   "b": 4,
+   "golden": null,
+   "confirmed": true
+  },
+  "p3": {
+   "teamA": "smash",
+   "teamB": "vorhand",
+   "a": 6,
+   "b": 0,
+   "golden": null,
+   "confirmed": true
+  },
+  "p5": {
+   "teamA": "schluepfer",
+   "teamB": "schubser",
+   "a": 4,
+   "b": 5,
+   "golden": null,
+   "confirmed": true
+  }
+ },
  "manualTies": {},
  "stamps": {
   "results/r1-D8": 1792171025738,
-  "results/r1-D6": 1792149021749,
-  "results/r1-D7": 1792080117771,
-  "results/r2-D6": 1792080117771,
-  "results/r2-D7": 1792080117771,
-  "results/r2-D8": 1792080117771,
-  "results/r3-D6": 1792080117771,
-  "results/r3-D7": 1792080117771,
-  "results/r3-D8": 1792080117771,
-  "results/r4-D6": 1792080117771,
-  "results/r4-D7": 1792080117771,
-  "results/r4-D8": 1792080117771,
-  "results/r5-D6": 1792080117771,
-  "results/r5-D7": 1792080117771,
-  "results/r5-D8": 1792080117771,
-  "finals/final": 1792080117771,
-  "finals/p3": 1792080117771,
-  "finals/p5": 1792080117771
+  "results/r1-D7": 1792171122684,
+  "results/r1-D6": 1792171378562,
+  "results/r2-D8": 1792172229943,
+  "results/r2-D7": 1792172401581,
+  "results/r2-D6": 1792172440432,
+  "results/r3-D8": 1792173544254,
+  "results/r3-D6": 1792173555119,
+  "results/r3-D7": 1792173561349,
+  "results/r4-D7": 1792174844510,
+  "results/r4-D6": 1792174864403,
+  "results/r4-D8": 1792174939491,
+  "results/r5-D8": 1792176076134,
+  "results/r5-D6": 1792176127658,
+  "results/r5-D7": 1792176145323,
+  "finals/final": 1792180868911,
+  "finals/p3": 1792180890053,
+  "finals/p5": 1792180914544
  },
- "savedAt": "2026-10-16T17:17:36.501Z"
+ "savedAt": "2026-10-16T21:27:34.299Z"
 }

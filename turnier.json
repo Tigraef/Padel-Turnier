@@ -3,14 +3,14 @@
  "results": {
   "r1-D6": {
    "a": 3,
-   "b": null,
-   "confirmed": false
+   "b": 4,
+   "confirmed": true
   }
  },
  "finals": {},
  "manualTies": {},
  "stamps": {
-  "results/r1-D6": 1792148975419,
+  "results/r1-D6": 1792148977499,
   "results/r1-D7": 1792080117771,
   "results/r1-D8": 1792080117771,
   "results/r2-D6": 1792080117771,
@@ -29,5 +29,5 @@
   "finals/p3": 1792080117771,
   "finals/p5": 1792080117771
  },
- "savedAt": "2026-10-16T11:09:36.432Z"
+ "savedAt": "2026-10-16T11:09:37.835Z"
 }

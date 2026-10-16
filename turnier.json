@@ -1,16 +1,10 @@
 {
  "v": 1,
- "results": {
-  "r1-D6": {
-   "a": 3,
-   "b": 4,
-   "confirmed": false
-  }
- },
+ "results": {},
  "finals": {},
  "manualTies": {},
  "stamps": {
-  "results/r1-D6": 1792149019475,
+  "results/r1-D6": 1792149021749,
   "results/r1-D7": 1792080117771,
   "results/r1-D8": 1792080117771,
   "results/r2-D6": 1792080117771,
@@ -29,5 +23,5 @@
   "finals/p3": 1792080117771,
   "finals/p5": 1792080117771
  },
- "savedAt": "2026-10-16T11:10:20.455Z"
+ "savedAt": "2026-10-16T11:10:22.632Z"
 }

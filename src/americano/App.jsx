@@ -598,7 +598,10 @@ function Ranking({ results }) {
     for (const round of ROUNDS) if (round.matches.some((m) => isConfirmed(results[m.id]))) r = round.round;
     return r;
   }, [results]);
-  const [sel, setSel] = useState(lastPlayed);
+  // Folgt automatisch der zuletzt gespielten Runde (wichtig für die Teilnehmer-Ansicht, die sich selbst aktualisiert),
+  // bis jemand bewusst eine Runde auswählt.
+  const [picked, setSel] = useState(null);
+  const sel = picked ?? lastPlayed;
   const { rows, counted } = computeRanking(results, { upToRound: sel });
   const selLabel = ROUNDS.find((r) => r.round === sel)?.label ?? '';
 

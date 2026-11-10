@@ -1,17 +1,10 @@
 {
  "v": 1,
- "results": {
-  "r1-D7": {
-   "a": 0,
-   "b": 24,
-   "confirmed": false,
-   "auto": "b"
-  }
- },
+ "results": {},
  "finals": {},
  "manualTies": {},
  "stamps": {
-  "results/r1-D7": 1794344808299
+  "results/r1-D7": 1794344809220
  },
- "savedAt": "2026-11-10T21:06:48.830Z"
+ "savedAt": "2026-11-10T21:06:50.581Z"
 }

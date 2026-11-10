@@ -3,14 +3,14 @@
  "results": {},
  "finals": {
   "format": {
-   "games": 7,
-   "skip": false,
+   "games": 9,
+   "skip": true,
    "confirmed": true
   }
  },
  "manualTies": {},
  "stamps": {
-  "finals/format": 1794343504860
+  "finals/format": 1794343506165
  },
- "savedAt": "2026-11-10T20:45:05.196Z"
+ "savedAt": "2026-11-10T20:45:07.031Z"
 }

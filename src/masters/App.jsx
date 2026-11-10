@@ -94,7 +94,7 @@ export default function App({ readOnly = false }) {
   const setFinal = change('finals');
   const setManualTie = change('manualTies');
   // readOnly ändert sich während der Laufzeit nie, daher ist der bedingte Hook-Aufruf stabil.
-  const sync = readOnly ? useViewerFeed(setState, MASTERS_FILE) : useMastersSync(state, setState);
+  const sync = readOnly ? useViewerFeed(setState, MASTERS_FILE, 5000) : useMastersSync(state, setState);
 
   const ctx = { state, results, finals, manualTies, showPlayers, setResult, setFinal, setManualTie, setTab, update };
   const round = currentRound(results);

@@ -5,7 +5,7 @@ import { DEFAULT_SYNC, loadSyncConfig, mergeShared, pickShared, pullRemote, push
 
 export const AMERICANO_FILE = { ...DEFAULT_SYNC, path: 'americano.json' };
 const CONFIG_KEY = 'padel-sync-config'; // derselbe Speicherplatz wie in der Turnier-App: Token nur einmal pro Gerät eingeben
-const POLL_MS = 8000;
+const POLL_MS = 5000; // alle 5 Sekunden den Stand des anderen Handys holen
 
 function readToken() {
   return loadSyncConfig().token || '';

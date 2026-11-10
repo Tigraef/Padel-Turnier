@@ -6,7 +6,7 @@ import { DEFAULT_SYNC, loadSyncConfig, mergeShared, pickShared, pullRemote, push
 
 export const MASTERS_FILE = { ...DEFAULT_SYNC, path: 'masters.json' };
 const CONFIG_KEY = 'padel-sync-config'; // derselbe Speicherplatz wie in den anderen Apps: Token nur einmal pro Gerät eingeben
-const POLL_MS = 8000;
+const POLL_MS = 5000; // alle 5 Sekunden den Stand des anderen Handys holen
 
 function readToken() {
   return loadSyncConfig().token || '';

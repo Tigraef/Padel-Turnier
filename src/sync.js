@@ -325,14 +325,14 @@ export function publicView(data) {
   return { results: keep(data?.results), finals: keep(data?.finals), manualTies: data?.manualTies || {} };
 }
 
-const VIEW_POLL_MS = 15000;
+export const VIEW_POLL_MS = 15000;
 
 /**
  * Liest den Turnierstand ohne Token. Bedingte Anfragen (ETag) zählen bei GitHub nicht
  * gegen das Limit von 60 Anfragen pro Stunde; bei erreichtem Limit wird auf
  * raw.githubusercontent.com ausgewichen (dort bis zu 5 Minuten Verzögerung).
  */
-export function useViewerFeed(setState, cfg = DEFAULT_SYNC) {
+export function useViewerFeed(setState, cfg = DEFAULT_SYNC, pollMs = VIEW_POLL_MS) {
   const [status, setStatus] = useState({ state: 'syncing', at: null, error: null });
   const etag = useRef(null);
 
@@ -374,7 +374,7 @@ export function useViewerFeed(setState, cfg = DEFAULT_SYNC) {
   useEffect(() => {
     refresh();
     const tick = () => document.visibilityState === 'visible' && refresh();
-    const interval = setInterval(tick, VIEW_POLL_MS);
+    const interval = setInterval(tick, pollMs);
     document.addEventListener('visibilitychange', tick);
     window.addEventListener('online', tick);
     return () => {
@@ -382,7 +382,7 @@ export function useViewerFeed(setState, cfg = DEFAULT_SYNC) {
       document.removeEventListener('visibilitychange', tick);
       window.removeEventListener('online', tick);
     };
-  }, [refresh]);
+  }, [refresh, pollMs]);
 
   return { status, refresh };
 }

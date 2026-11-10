@@ -68,3 +68,5 @@ Danach Platzierungsspiele 1–2, 3–4, 5–6, 7–8 als Best of 7 oder Best of 
 dann zählt die Abschlusstabelle. Aufbau und Look wie die Turnier-App, Code in `src/masters/` (Teams, Courts, Zeiten in
 `src/masters/logic.js`), Build `npm run build:masters` (ES5, läuft auch auf alten iPads). Abgleich über denselben Token,
 aber eigene Datei `masters.json`.
+
+Abgleich in der Americano- und der Masters-App: Turnierleitung und Teilnehmer-Ansicht holen den Stand alle 5 Sekunden.

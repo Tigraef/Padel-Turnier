@@ -75,7 +75,7 @@ export default function App({ readOnly = false }) {
   const [planRound, setPlanRound] = useState(null);
   const [sheet, setSheet] = useState(null);
   // readOnly ändert sich während der Laufzeit nie, daher ist der bedingte Hook-Aufruf stabil.
-  const sync = readOnly ? useViewerFeed(setState, AMERICANO_FILE) : useAmericanoSync(state, setState);
+  const sync = readOnly ? useViewerFeed(setState, AMERICANO_FILE, 5000) : useAmericanoSync(state, setState);
 
   useEffect(() => {
     const onHash = () => setTabState(readHash());

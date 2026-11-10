@@ -59,3 +59,12 @@ Die normale App bleibt davon unberührt.
 `https://tigraef.github.io/Padel-Turnier/americano/` (Teilnehmer: `…/americano/?ansicht`). 10 Spieler, 8 Runden + Bonusrunde,
 24 Punkte pro Match, Einzelwertung nach Ø Punkten pro Match. Code in `src/americano/`, Build `npm run build:americano`
 (ES5, läuft auch auf alten iPads). Abgleich über denselben Token, aber eigene Datei `americano.json`.
+
+## TJ Padel Masters am 29.11.2026 (eigene App)
+
+`https://tigraef.github.io/Padel-Turnier/masters/` (Teilnehmer: `…/masters/?ansicht`). Sonntag, 11:00–14:00 Uhr bei Hanse Padel.
+8 Teams, 4 Courts parallel, 7 Runden jeder gegen jeden (28 Matches, niemand setzt aus), max. 8 Games, Pause nach Runde 4.
+Danach Platzierungsspiele 1–2, 3–4, 5–6, 7–8 als Best of 7 oder Best of 9 (in der App umschaltbar) – oder „Keine Zeit“,
+dann zählt die Abschlusstabelle. Aufbau und Look wie die Turnier-App, Code in `src/masters/` (Teams, Courts, Zeiten in
+`src/masters/logic.js`), Build `npm run build:masters` (ES5, läuft auch auf alten iPads). Abgleich über denselben Token,
+aber eigene Datei `masters.json`.

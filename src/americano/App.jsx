@@ -74,6 +74,7 @@ export default function App({ readOnly = false }) {
   const [tab, setTabState] = useState(readHash);
   const [planRound, setPlanRound] = useState(null);
   const [sheet, setSheet] = useState(null);
+  const online = useOnline();
   // readOnly ändert sich während der Laufzeit nie, daher ist der bedingte Hook-Aufruf stabil.
   const sync = readOnly ? useViewerFeed(setState, AMERICANO_FILE) : useAmericanoSync(state, setState);
 
@@ -116,9 +117,9 @@ export default function App({ readOnly = false }) {
               </span>
             </button>
             {readOnly ? (
-              <SyncBadge status={sync.status} label="Live" onClick={sync.refresh} />
+              <SyncBadge status={sync.status} online={online} label="Live" onClick={sync.refresh} />
             ) : (
-              <SyncBadge status={sync.status} onClick={() => setSheet('sync')} />
+              <SyncBadge status={sync.status} online={online} onClick={() => setSheet('sync')} />
             )}
           </div>
         </header>
@@ -755,14 +756,33 @@ function Medal({ place }) {
 
 /* ---------------- Abgleich, Export, Zurücksetzen ---------------- */
 
-function SyncBadge({ status, label, onClick }) {
-  const text = label && status.state !== 'offline' ? label : { off: 'Lokal', syncing: 'Sync …', ok: 'Sync', offline: 'Offline', error: 'Sync-Fehler' }[status.state];
+// Grün = Internet und Abgleich in Ordnung, rot = keine Verbindung (oder Abgleich-Fehler).
+function SyncBadge({ status, online, label, onClick }) {
+  const down = !online || status.state === 'offline';
+  const text = down ? 'Kein Netz' : label || { off: 'Lokal', syncing: 'Sync …', ok: 'Sync', error: 'Sync-Fehler' }[status.state];
+  const tone = down || status.state === 'error' ? 'down' : 'up';
   return (
-    <button className={`sync-badge sync-${status.state}`} onClick={onClick} aria-label={`Abgleich: ${text}`}>
+    <button className={`sync-badge sync-${status.state} mx-conn-${tone}`} onClick={onClick} aria-label={`Abgleich: ${text}`}>
       <span className="sync-dot" aria-hidden="true" />
       {text}
     </button>
   );
+}
+
+/** Verfolgt, ob das Gerät laut Browser online ist (reagiert sofort auf Flugmodus/WLAN-Verlust). */
+function useOnline() {
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
+  }, []);
+  return online;
 }
 
 function SyncSheet({ sync, onClose }) {

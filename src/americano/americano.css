@@ -67,3 +67,15 @@
 .americano .seg-btn {
   flex: 1 0 52px;
 }
+
+/* Verbindungsanzeige oben: grün = online, rot = keine Verbindung (wie in der Masters-App) */
+.mx-conn-up .sync-dot {
+  background: #3ddc84;
+}
+.mx-conn-down {
+  border-color: rgba(255, 138, 128, 0.7);
+}
+.mx-conn-down .sync-dot {
+  background: #ff3b30;
+  animation: pulse 1s ease-in-out infinite alternate;
+}

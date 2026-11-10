@@ -1,8 +1,16 @@
 {
  "v": 1,
  "results": {},
- "finals": {},
+ "finals": {
+  "format": {
+   "games": 7,
+   "skip": true,
+   "confirmed": true
+  }
+ },
  "manualTies": {},
- "stamps": {},
- "savedAt": "2026-11-10T20:44:40.105Z"
+ "stamps": {
+  "finals/format": 1794343497150
+ },
+ "savedAt": "2026-11-10T20:44:57.274Z"
 }

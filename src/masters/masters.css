@@ -18,3 +18,15 @@
   background: var(--surface);
   border: 1px dashed var(--line);
 }
+
+/* Verbindungsanzeige oben: grün = online, rot = keine Verbindung */
+.mx-conn-up .sync-dot {
+  background: #3ddc84;
+}
+.mx-conn-down {
+  border-color: rgba(255, 138, 128, 0.7);
+}
+.mx-conn-down .sync-dot {
+  background: #ff3b30;
+  animation: pulse 1s ease-in-out infinite alternate;
+}

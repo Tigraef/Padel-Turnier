@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
       - run: npm run build:ipad
       - run: npm run build:americano
+      - run: npm run build:masters
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -9,7 +9,8 @@
     "test": "node --test tests/*.test.js",
     "build:artifact": "vite build && node scripts/inline-build.js",
     "build:ipad": "vite build -c vite.ipad.config.js && node scripts/finish-ipad-build.js",
-    "build:americano": "vite build -c vite.americano.config.js && node scripts/finish-americano-build.js"
+    "build:americano": "vite build -c vite.americano.config.js && node scripts/finish-americano-build.js",
+    "build:masters": "vite build -c vite.masters.config.js && node scripts/finish-masters-build.js"
   },
   "repository": {
     "type": "git",

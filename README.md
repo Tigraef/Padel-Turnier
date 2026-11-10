@@ -53,3 +53,9 @@ aktualisiert sich alle 15 Sekunden (bedingte Anfragen mit ETag, die nicht gegen 
 `https://tigraef.github.io/Padel-Turnier/ipad/` (Teilnehmer-Ansicht: `…/ipad/?ansicht`) – dieselbe App,
 aber als reines ES5 mit Polyfills (ab iOS 9) gebaut (`npm run build:ipad`, Konfiguration `vite.ipad.config.js`).
 Die normale App bleibt davon unberührt.
+
+## Americano-Turnier (eigene App)
+
+`https://tigraef.github.io/Padel-Turnier/americano/` (Teilnehmer: `…/americano/?ansicht`). 10 Spieler, 8 Runden + Bonusrunde,
+24 Punkte pro Match, Einzelwertung nach Ø Punkten pro Match. Code in `src/americano/`, Build `npm run build:americano`
+(ES5, läuft auch auf alten iPads). Abgleich über denselben Token, aber eigene Datei `americano.json`.

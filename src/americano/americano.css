@@ -1,0 +1,69 @@
+/* Americano-App: Ergänzungen zum gemeinsamen Stil. */
+.americano-tabs .tab {
+  font-size: 12.5px;
+}
+.am-court-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .am-court-row {
+    grid-template-columns: 1fr;
+  }
+}
+.am-pause {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  font-weight: 600;
+}
+.am-pause-label {
+  margin-right: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.am-players li {
+  padding-block: 9px;
+}
+.am-standings {
+  min-width: 480px;
+}
+.am-standings .c-team {
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+}
+.am-standings tr.is-podium td {
+  background: var(--court-tint);
+}
+.am-rank-1 {
+  background: var(--gold);
+  color: #3a2c00;
+}
+.am-rank-2 {
+  background: var(--silver);
+  color: #1f2830;
+}
+.am-rank-3 {
+  background: var(--bronze);
+  color: #ffffff;
+}
+.final-list li > .muted {
+  margin-left: auto;
+}
+.americano .seg {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.americano .seg-btn {
+  flex: 1 0 52px;
+}

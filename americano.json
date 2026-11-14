@@ -76,8 +76,8 @@
   "r7-D7": {
    "a": 8,
    "b": 16,
-   "confirmed": false,
-   "auto": "b"
+   "confirmed": true,
+   "auto": null
   }
  },
  "finals": {},
@@ -95,7 +95,7 @@
   "results/r5-D8": 1794683180173,
   "results/r6-D8": 1794683861001,
   "results/r6-D7": 1794683885754,
-  "results/r7-D7": 1794684473575
+  "results/r7-D7": 1794684479998
  },
- "savedAt": "2026-11-14T19:27:53.785Z"
+ "savedAt": "2026-11-14T19:28:00.574Z"
 }

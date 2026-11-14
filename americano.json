@@ -10,15 +10,15 @@
   "r1-D8": {
    "a": 12,
    "b": 12,
-   "confirmed": false,
-   "auto": "b"
+   "confirmed": true,
+   "auto": null
   }
  },
  "finals": {},
  "manualTies": {},
  "stamps": {
   "results/r1-D7": 1794681189090,
-  "results/r1-D8": 1794681191286
+  "results/r1-D8": 1794681192610
  },
- "savedAt": "2026-11-14T18:33:12.117Z"
+ "savedAt": "2026-11-14T18:33:13.891Z"
 }

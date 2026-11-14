@@ -60,6 +60,12 @@
    "b": 20,
    "confirmed": true,
    "auto": null
+  },
+  "r6-D8": {
+   "a": 16,
+   "b": 8,
+   "confirmed": false,
+   "auto": "b"
   }
  },
  "finals": {},
@@ -74,7 +80,8 @@
   "results/r4-D7": 1794682438540,
   "results/r4-D8": 1794682608196,
   "results/r5-D7": 1794683120893,
-  "results/r5-D8": 1794683180173
+  "results/r5-D8": 1794683180173,
+  "results/r6-D8": 1794683859567
  },
- "savedAt": "2026-11-14T19:06:21.012Z"
+ "savedAt": "2026-11-14T19:17:40.464Z"
 }

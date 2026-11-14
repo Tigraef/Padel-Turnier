@@ -4,14 +4,14 @@
   "r1-D7": {
    "a": 15,
    "b": 9,
-   "confirmed": false,
-   "auto": "b"
+   "confirmed": true,
+   "auto": null
   }
  },
  "finals": {},
  "manualTies": {},
  "stamps": {
-  "results/r1-D7": 1794681162041
+  "results/r1-D7": 1794681189090
  },
- "savedAt": "2026-11-14T18:32:42.933Z"
+ "savedAt": "2026-11-14T18:33:09.939Z"
 }

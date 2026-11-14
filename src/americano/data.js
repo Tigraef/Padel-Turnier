@@ -5,21 +5,20 @@ export const POINTS_PER_MATCH = 24;
 export const ROUND_MINUTES = 15;
 export const START_TIME = '19:00';
 
-export const PLAYERS = ['Bosi', 'Jana', 'Tobi', 'Max', 'Kevin', 'Freddy', 'Liza', 'Nina', 'Kristina', 'Daniel'];
+export const PLAYERS = ['Liza', 'Tobi', 'Freddy', 'Daniel', 'Jana', 'Max', 'Lars', 'Kevin'];
 
 export const COURTS = ['D7', 'D8'];
 
-// Fester Spielplan – exakt wie vorgegeben. Pro Runde: [D7-Team1, D7-Team2, D8-Team1, D8-Team2], Pause.
+// Fester Spielplan – exakt wie vorgegeben (8 Spieler, 7 Runden, keine Pausen).
+// Pro Runde: [[D7-Team1, D7-Team2], [D8-Team1, D8-Team2]]. Jeder spielt genau einmal mit jedem zusammen.
 const FIXED = [
-  { round: 1, matches: [[['Bosi', 'Jana'], ['Tobi', 'Max']], [['Kevin', 'Freddy'], ['Liza', 'Nina']]], pause: ['Kristina', 'Daniel'] },
-  { round: 2, matches: [[['Tobi', 'Kevin'], ['Max', 'Freddy']], [['Daniel', 'Liza'], ['Kristina', 'Nina']]], pause: ['Jana', 'Bosi'] },
-  { round: 3, matches: [[['Bosi', 'Daniel'], ['Kevin', 'Liza']], [['Freddy', 'Kristina'], ['Jana', 'Nina']]], pause: ['Tobi', 'Max'] },
-  { round: 4, matches: [[['Max', 'Kristina'], ['Tobi', 'Nina']], [['Daniel', 'Jana'], ['Kevin', 'Bosi']]], pause: ['Liza', 'Freddy'] },
-  { round: 5, matches: [[['Freddy', 'Jana'], ['Max', 'Liza']], [['Daniel', 'Kevin'], ['Tobi', 'Kristina']]], pause: ['Bosi', 'Nina'] },
-  { round: 6, matches: [[['Nina', 'Bosi'], ['Tobi', 'Jana']], [['Max', 'Daniel'], ['Liza', 'Freddy']]], pause: ['Kevin', 'Kristina'] },
-  { round: 7, matches: [[['Bosi', 'Kristina'], ['Freddy', 'Nina']], [['Jana', 'Kevin'], ['Tobi', 'Liza']]], pause: ['Max', 'Daniel'] },
-  { round: 8, matches: [[['Jana', 'Liza'], ['Bosi', 'Tobi']], [['Kevin', 'Max'], ['Daniel', 'Kristina']]], pause: ['Freddy', 'Nina'] },
-  { round: 9, bonus: true, matches: [[['Liza', 'Kristina'], ['Bosi', 'Freddy']], [['Jana', 'Max'], ['Daniel', 'Nina']]], pause: ['Tobi', 'Kevin'] },
+  { round: 1, matches: [[['Tobi', 'Freddy'], ['Daniel', 'Jana']], [['Liza', 'Kevin'], ['Max', 'Lars']]], pause: [] },
+  { round: 2, matches: [[['Liza', 'Jana'], ['Daniel', 'Kevin']], [['Tobi', 'Max'], ['Lars', 'Freddy']]], pause: [] },
+  { round: 3, matches: [[['Liza', 'Freddy'], ['Tobi', 'Kevin']], [['Lars', 'Jana'], ['Daniel', 'Max']]], pause: [] },
+  { round: 4, matches: [[['Liza', 'Daniel'], ['Tobi', 'Lars']], [['Jana', 'Kevin'], ['Max', 'Freddy']]], pause: [] },
+  { round: 5, matches: [[['Liza', 'Max'], ['Daniel', 'Freddy']], [['Tobi', 'Jana'], ['Lars', 'Kevin']]], pause: [] },
+  { round: 6, matches: [[['Liza', 'Tobi'], ['Max', 'Jana']], [['Lars', 'Daniel'], ['Kevin', 'Freddy']]], pause: [] },
+  { round: 7, matches: [[['Liza', 'Lars'], ['Freddy', 'Jana']], [['Tobi', 'Daniel'], ['Kevin', 'Max']]], pause: [] },
 ];
 
 export const ROUNDS = FIXED.map((r) => ({
@@ -57,7 +56,7 @@ export function validateSchedule(rounds = ROUNDS, players = PLAYERS) {
     return names.length !== players.length || new Set(names).size !== players.length || !players.every((p) => names.includes(p));
   });
   checks.push({
-    label: 'Jede Runde: alle 10 Spieler genau einmal eingeteilt',
+    label: `Jede Runde: alle ${players.length} Spieler genau einmal eingeteilt`,
     ok: bad.length === 0,
     detail: bad.length ? `Fehler in ${bad.map((r) => r.label).join(', ')}` : `${rounds.length} Runden geprüft`,
   });
@@ -73,7 +72,7 @@ export function validateSchedule(rounds = ROUNDS, players = PLAYERS) {
   const counts = gamesPerPlayer(rounds.filter((r) => !r.bonus), players);
   const values = Object.values(counts);
   checks.push({
-    label: 'Spiele pro Person (ohne Bonusrunde)',
+    label: 'Spiele pro Person',
     ok: true,
     detail:
       Math.min(...values) === Math.max(...values)
@@ -110,8 +109,8 @@ export function isConfirmed(result) {
 
 /**
  * Einzelwertung aus allen bestätigten Matches (optional nur bis einschließlich `upToRound`).
- * Jeder Spieler bekommt die Punkte seines Teams. Sortiert nach Punktquote (Ø Punkte pro Match),
- * dann Gesamtpunkte, dann Punktdifferenz. Wer noch nicht gespielt hat, steht unten.
+ * Jeder Spieler bekommt die Punkte seines Teams. Wer die meisten Punkte hat, gewinnt.
+ * Bei gleicher Punktzahl teilen sich die Spieler den Platz. Wer noch nicht gespielt hat, steht unten.
  */
 export function computeRanking(results, { upToRound = Infinity, players = PLAYERS, matches = MATCHES } = {}) {
   const rows = Object.fromEntries(
@@ -147,8 +146,8 @@ export function computeRanking(results, { upToRound = Infinity, players = PLAYER
   }));
 
   const cmp = (x, y) => {
-    if (x.average == null || y.average == null) return (x.average == null) - (y.average == null);
-    return y.average - x.average || y.points - x.points || y.diff - x.diff;
+    if (!x.played || !y.played) return !x.played - !y.played;
+    return y.points - x.points;
   };
   list.sort((x, y) => cmp(x, y) || players.indexOf(x.player) - players.indexOf(y.player));
 
@@ -170,12 +169,13 @@ export function signed(n) {
   return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0';
 }
 
-/** Erste Runde (ohne Bonus) mit offenem Match; 'bonus' danach; 'done' wenn auch die Bonusrunde bestätigt ist. */
+/** Erste Runde (ohne Bonus) mit offenem Match; 'bonus' danach (falls es eine gibt); 'done' wenn alles bestätigt ist. */
 export function currentRound(results) {
   for (const r of ROUNDS.filter((x) => !x.bonus)) {
     if (r.matches.some((m) => !isConfirmed(results[m.id]))) return r.round;
   }
   const bonus = ROUNDS.find((r) => r.bonus);
+  if (!bonus) return 'done';
   return bonus.matches.every((m) => isConfirmed(results[m.id])) ? 'done' : 'bonus';
 }
 
@@ -194,12 +194,12 @@ export function exportText(results) {
       const score = isConfirmed(res) ? `${res.a}:${res.b}` : 'offen';
       lines.push(`  ${m.court}: ${m.team1.join(' + ')} – ${m.team2.join(' + ')}  ${score}`);
     }
-    lines.push(`  Pause: ${r.pause.join(', ')}`);
+    if (r.pause.length) lines.push(`  Pause: ${r.pause.join(', ')}`);
   }
-  lines.push('', 'Rangliste (Ø Punkte pro Match)');
+  lines.push('', 'Rangliste (Gesamtpunkte)');
   for (const row of computeRanking(results).rows) {
     lines.push(
-      `  ${row.rank ?? '–'}. ${row.player}: Ø ${formatAverage(row.average)} · ${row.points} Punkte in ${row.played} Matches`,
+      `  ${row.rank ?? '–'}. ${row.player}: ${row.points} Punkte in ${row.played} Matches`,
     );
   }
   return lines.join('\n');

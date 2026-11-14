@@ -56,8 +56,8 @@ Die normale App bleibt davon unberührt.
 
 ## Americano-Turnier (eigene App)
 
-`https://tigraef.github.io/Padel-Turnier/americano/` (Teilnehmer: `…/americano/?ansicht`). 10 Spieler, 8 Runden + Bonusrunde,
-24 Punkte pro Match, Einzelwertung nach Ø Punkten pro Match. Code in `src/americano/`, Build `npm run build:americano`
+`https://tigraef.github.io/Padel-Turnier/americano/` (Teilnehmer: `…/americano/?ansicht`). 8 Spieler, 7 Runden à 15 Minuten
+(jeder spielt genau einmal mit jedem zusammen, keine Pausen), max. 24 Punkte pro Match, Einzelwertung nach Gesamtpunkten. Code in `src/americano/`, Build `npm run build:americano`
 (ES5, läuft auch auf alten iPads). Abgleich über denselben Token, aber eigene Datei `americano.json`.
 
 ## TJ Padel Masters am 29.11.2026 (eigene App)

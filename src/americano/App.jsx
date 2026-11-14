@@ -15,7 +15,6 @@ import {
   gamesPerPlayer,
   currentRound,
   progress,
-  formatAverage,
   signed,
   exportText,
 } from './data.js';
@@ -235,7 +234,7 @@ function Dashboard({ state, setState, round, openPlan, setTab, onSync, onExport,
       {!readOnly && current && <RoundTimer timer={state.timer} label={current.label} onChange={(timer) => setState((s) => ({ ...s, timer }))} />}
 
       <section className="stack">
-        <SectionHead title="Spieler" note="Matches ohne Bonusrunde" />
+        <SectionHead title="Spieler" note={`je ${REGULAR_ROUNDS} Matches`} />
         <ul className="team-list am-players">
           {PLAYERS.map((p) => (
             <li key={p}>
@@ -244,7 +243,13 @@ function Dashboard({ state, setState, round, openPlan, setTab, onSync, onExport,
             </li>
           ))}
         </ul>
-        <p className="muted small">Wertung: Punkte werden einzeln gesammelt. Weil nicht alle gleich viele Matches spielen, zählt der Durchschnitt pro Match.</p>
+        <p className="muted small">
+          Wertung: Jeder sammelt die erzielten Punkte seines Teams. Wer nach {REGULAR_ROUNDS} Runden die meisten Punkte hat, gewinnt.
+        </p>
+        <p className="muted small">
+          Spielregeln: Pro Match werden maximal {POINTS_PER_MATCH} Punkte gespielt. Sobald {POINTS_PER_MATCH} Punkte erreicht sind, ist das Match
+          beendet. Spätestens zum nächsten Rundenbeginn müssen alle auf dem nächsten Court bereitstehen.
+        </p>
       </section>
 
       {!readOnly && (
@@ -288,6 +293,7 @@ function Dashboard({ state, setState, round, openPlan, setTab, onSync, onExport,
 }
 
 function PauseLine({ pause }) {
+  if (!pause.length) return null;
   return (
     <p className="am-pause">
       <span className="am-pause-label">Pause</span>
@@ -455,7 +461,7 @@ function Schedule({ results, setResult, round, planRound, setPlanRound }) {
             ))}
           </div>
           <PauseLine pause={r.pause} />
-          {selected !== 'all' && idx === 0 && !r.bonus && (
+          {selected !== 'all' && idx === 0 && !r.bonus && (r.round < REGULAR_ROUNDS || ROUNDS.some((x) => x.bonus)) && (
             <button className="btn btn-ghost btn-block" onClick={() => setPlanRound(r.round < REGULAR_ROUNDS ? r.round + 1 : 'bonus')}>
               Weiter zu {r.round < REGULAR_ROUNDS ? `Runde ${r.round + 1}` : 'Bonusrunde'} →
             </button>
@@ -610,7 +616,7 @@ function Ranking({ results }) {
     <div className="stack-lg">
       <div className="page-head">
         <h2 className="page-title">Rangliste</h2>
-        <p className="muted">Sortiert nach Ø Punkten pro Match, dann Gesamtpunkte, dann Differenz</p>
+        <p className="muted">Sortiert nach gesammelten Punkten · wer die meisten Punkte hat, gewinnt</p>
       </div>
       <div className="stack">
         <p className="label muted">Stand nach</p>
@@ -632,9 +638,8 @@ function Ranking({ results }) {
             <tr>
               <th className="c-rank" scope="col">Pl.</th>
               <th className="c-team" scope="col">Spieler</th>
-              <th scope="col" className="c-pts" title="Durchschnittliche Punkte pro Match">Ø</th>
+              <th scope="col" className="c-pts" title="Gesammelte Punkte">Pkt</th>
               <th scope="col" title="Matches">Sp</th>
-              <th scope="col" title="Gesammelte Punkte">Pkt</th>
               <th scope="col" title="Siege">S</th>
               <th scope="col" title="Unentschieden">U</th>
               <th scope="col" title="Niederlagen">N</th>
@@ -653,9 +658,8 @@ function Ranking({ results }) {
                 <td className="c-team">
                   <span className="team-name">{r.player}</span>
                 </td>
-                <td className="num c-pts">{formatAverage(r.average)}</td>
+                <td className="num c-pts">{r.points}</td>
                 <td className="num">{r.played}</td>
-                <td className="num">{r.points}</td>
                 <td className="num">{r.won}</td>
                 <td className="num">{r.drawn}</td>
                 <td className="num">{r.lost}</td>
@@ -666,7 +670,7 @@ function Ranking({ results }) {
         </table>
       </div>
       <p className="muted small">
-        Ø = gesammelte Punkte geteilt durch gespielte Matches. Jeder Spieler bekommt die Punkte seines Teams. „=“ bedeutet exakt gleichauf.
+        Jeder Spieler bekommt die Punkte seines Teams. Bei gleicher Punktzahl teilen sich die Spieler den Platz („=“).
       </p>
     </div>
   );
@@ -677,7 +681,8 @@ function Ranking({ results }) {
 function Winners({ results, setTab }) {
   const prog = progress(results);
   const { rows } = computeRanking(results);
-  const bonusDone = ROUNDS.find((r) => r.bonus).matches.every((m) => isConfirmed(results[m.id]));
+  const bonusRound = ROUNDS.find((r) => r.bonus);
+  const bonusDone = !!bonusRound && bonusRound.matches.every((m) => isConfirmed(results[m.id]));
 
   if (!prog.complete) {
     return (
@@ -716,7 +721,7 @@ function Winners({ results, setTab }) {
             <div className="podium-team">
               {players.length > 0 && <Medal place={place} />}
               <span className="podium-name">{players.map((p) => p.player).join(' & ') || ' '}</span>
-              {players.length > 0 && <span className="players">Ø {formatAverage(players[0].average)}</span>}
+              {players.length > 0 && <span className="players">{players[0].points} Punkte</span>}
             </div>
             <div className="podium-block">
               <span className="num">{place}</span>
@@ -731,7 +736,7 @@ function Winners({ results, setTab }) {
             <li key={r.player}>
               <span className="num final-place">{r.rank ?? '–'}.</span>
               <span className="team-name">{r.player}</span>
-              <span className="muted">Ø {formatAverage(r.average)}</span>
+              <span className="muted">{r.points} Punkte</span>
             </li>
           ))}
       </ol>

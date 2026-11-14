@@ -28,8 +28,8 @@
   "r3-D8": {
    "a": 11,
    "b": 13,
-   "confirmed": false,
-   "auto": "b"
+   "confirmed": true,
+   "auto": null
   }
  },
  "finals": {},
@@ -39,7 +39,7 @@
   "results/r1-D8": 1794681192610,
   "results/r2-D7": 1794681784086,
   "results/r3-D7": 1794681799088,
-  "results/r3-D8": 1794681804791
+  "results/r3-D8": 1794681806843
  },
- "savedAt": "2026-11-14T18:43:24.869Z"
+ "savedAt": "2026-11-14T18:43:27.639Z"
 }

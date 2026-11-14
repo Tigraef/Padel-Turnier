@@ -40,8 +40,8 @@
   "r4-D7": {
    "a": 12,
    "b": 12,
-   "confirmed": false,
-   "auto": "b"
+   "confirmed": true,
+   "auto": null
   }
  },
  "finals": {},
@@ -53,7 +53,7 @@
   "results/r3-D7": 1794681799088,
   "results/r3-D8": 1794681806843,
   "results/r2-D8": 1794681896333,
-  "results/r4-D7": 1794682437411
+  "results/r4-D7": 1794682438540
  },
- "savedAt": "2026-11-14T18:53:58.260Z"
+ "savedAt": "2026-11-14T18:53:59.900Z"
 }

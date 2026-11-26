@@ -1,11 +1,11 @@
 {
  "v": 2,
  "stamps": {
-  "results/r1-D6": 1795707005836
+  "results/r1-D6": 1795707322522
  },
  "results": {
   "r1-D6": {
-   "a": 0,
+   "a": 3,
    "b": null,
    "confirmed": false,
    "short": false
@@ -14,5 +14,5 @@
  "finals": {},
  "manualTies": {},
  "settings": {},
- "savedAt": "2026-11-26T15:34:40.470Z"
+ "savedAt": "2026-11-26T15:35:22.654Z"
 }

@@ -216,6 +216,33 @@ export function validateGroupScore(a, b, short = false) {
   return { ok: true, error: null, short: total < GROUP_GAMES };
 }
 
+/**
+ * Vorrunde: Trägt man die Games eines Teams ein, schlägt die App für den Gegner
+ * GROUP_GAMES minus diesen Wert vor. `suggested` merkt sich, welche Seite ('a' | 'b')
+ * gerade nur ein Vorschlag ist. Nur diese Seite wird automatisch nachgeführt; ändert man
+ * sie von Hand (z. B. bei Abbruch), gilt sie als eingetragen und bleibt stehen.
+ */
+export function applyGroupScoreChange(result, side, next) {
+  const other = side === 'a' ? 'b' : 'a';
+  const cur = { a: result?.a ?? null, b: result?.b ?? null, suggested: result?.suggested ?? null };
+  if (cur.suggested === side) return { a: cur.a, b: cur.b, [side]: next, suggested: null };
+  const out = { a: cur.a, b: cur.b, [side]: next, suggested: cur.suggested };
+  const otherFree = cur[other] == null || cur.suggested === other;
+  if (otherFree && next != null && isInt(next) && next <= GROUP_GAMES) {
+    out[other] = GROUP_GAMES - next;
+    out.suggested = other;
+  }
+  return out;
+}
+
+/** Obergrenze für den Plus-Knopf einer Seite: folgt der Gegner noch dem Vorschlag, bis GROUP_GAMES. */
+export function groupStepperMax(result, side) {
+  const other = side === 'a' ? 'b' : 'a';
+  const o = result?.[other] ?? null;
+  if (o == null || result?.suggested === other) return GROUP_GAMES;
+  return Math.max(0, GROUP_GAMES - o);
+}
+
 export function isConfirmedGroup(result) {
   return !!result && result.confirmed === true && validateGroupScore(result.a, result.b, !!result.short).ok;
 }

@@ -18,6 +18,8 @@ import {
   berlinMinutes,
   validateSchedule,
   validateGroupScore,
+  applyGroupScoreChange,
+  groupStepperMax,
   isConfirmedGroup,
   groupMatchStatus,
   computeStandings,
@@ -900,7 +902,7 @@ function GroupMatchCard({ match, result, settings, showPlayers, onChange }) {
   const b = result?.b ?? null;
   const v = validateGroupScore(a, b, false);
   const total = (a ?? 0) + (b ?? 0);
-  const set = (patch) => onChange({ a, b, confirmed: false, short: false, ...patch });
+  const set = (patch) => onChange({ a, b, suggested: result?.suggested ?? null, confirmed: false, short: false, ...patch });
 
   return (
     <article className={`match status-${status}`}>
@@ -909,8 +911,8 @@ function GroupMatchCard({ match, result, settings, showPlayers, onChange }) {
         <StatusChip status={status} />
       </header>
       <div className="match-body">
-        <TeamScore id={match.home} value={a} showPlayers={showPlayers} locked={confirmed} max={GROUP_GAMES - (b ?? 0)} onChange={(n) => set({ a: n })} winner={confirmed && a > b} />
-        <TeamScore id={match.away} value={b} showPlayers={showPlayers} locked={confirmed} max={GROUP_GAMES - (a ?? 0)} onChange={(n) => set({ b: n })} winner={confirmed && b > a} />
+        <TeamScore id={match.home} value={a} showPlayers={showPlayers} locked={confirmed} max={groupStepperMax(result, 'a')} onChange={(n) => set(applyGroupScoreChange(result, 'a', n))} winner={confirmed && a > b} />
+        <TeamScore id={match.away} value={b} showPlayers={showPlayers} locked={confirmed} max={groupStepperMax(result, 'b')} onChange={(n) => set(applyGroupScoreChange(result, 'b', n))} winner={confirmed && b > a} />
       </div>
       <footer className="match-foot">
         {confirmed ? (

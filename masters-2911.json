@@ -1,19 +1,12 @@
 {
  "v": 2,
  "stamps": {
-  "results/r1-D6": 1795707573561,
+  "results/r1-D6": 1795707575364,
   "results/r1-D7": 1795707403989,
   "settings/rounds/1": 1795707358592,
   "settings/timer": 1795707361625
  },
- "results": {
-  "r1-D6": {
-   "a": 3,
-   "b": null,
-   "confirmed": false,
-   "short": false
-  }
- },
+ "results": {},
  "finals": {},
  "manualTies": {},
  "settings": {
@@ -30,5 +23,5 @@
    "total": 1200000
   }
  },
- "savedAt": "2026-11-26T15:39:35.195Z"
+ "savedAt": "2026-11-26T15:39:36.871Z"
 }

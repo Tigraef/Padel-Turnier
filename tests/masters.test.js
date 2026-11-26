@@ -8,6 +8,8 @@ import {
   DEFAULT_TEAMS,
   validateSchedule,
   validateGroupScore,
+  applyGroupScoreChange,
+  groupStepperMax,
   isConfirmedGroup,
   validateFinalScore,
   computeStandings,
@@ -284,4 +286,27 @@ test('Export: CSV mit Ergebnissen und Abschlusstabelle', () => {
   const tab = standingsCsv(state);
   assert.match(tab.split('\r\n')[1], /^1;Die Lobster;Tim & Jana;7;7;0;0;35;21;14;14;1$/);
   assert.match(exportText(state), /Endstand/);
+});
+
+test('Vorrunde: Gegner-Games werden mit 8 minus Eingabe vorgeschlagen und bleiben überschreibbar', () => {
+  // Erste Eingabe füllt den Gegner
+  let r = applyGroupScoreChange(null, 'a', 5);
+  assert.deepEqual(r, { a: 5, b: 3, suggested: 'b' });
+  assert.equal(groupStepperMax(r, 'a'), 8);
+  // Eingabe ändern: Vorschlag wandert mit
+  r = applyGroupScoreChange(r, 'a', 6);
+  assert.deepEqual(r, { a: 6, b: 2, suggested: 'b' });
+  // Gegner von Hand überschreiben (Abbruch): eigener Wert bleibt
+  r = applyGroupScoreChange(r, 'b', 1);
+  assert.deepEqual(r, { a: 6, b: 1, suggested: null });
+  assert.equal(validateGroupScore(r.a, r.b).needsShort, true);
+  // Danach wird nichts mehr automatisch überschrieben
+  r = applyGroupScoreChange(r, 'a', 4);
+  assert.deepEqual(r, { a: 4, b: 1, suggested: null });
+  assert.equal(groupStepperMax(r, 'a'), 7);
+  // Auch von der Gegenseite aus, und 8:0 funktioniert
+  assert.deepEqual(applyGroupScoreChange({ a: null, b: null }, 'b', 8), { a: 0, b: 8, suggested: 'a' });
+  // Ungültige Eingaben erzeugen keinen Vorschlag
+  assert.deepEqual(applyGroupScoreChange(null, 'a', 12), { a: 12, b: null, suggested: null });
+  assert.deepEqual(applyGroupScoreChange({ a: 5, b: 3, suggested: 'b' }, 'a', null), { a: null, b: 3, suggested: 'b' });
 });

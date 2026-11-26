@@ -1,26 +1,26 @@
-/* TJ Padel Masters: Dunkelblau als Hauptfarbe, goldene Akzente, weiße Schrift, Ball-Neongelb als Signal. */
+/* TJ Padel Masters: Helles Blau als Hauptfarbe, goldene Akzente, weiße Schrift, Ball-Neongelb als Signal. */
 :root[data-theme='dark'] {
-  --bg: #071428;
-  --surface: #0e2142;
-  --surface-2: #132a52;
+  --bg: #15427e;
+  --surface: #1b4d8d;
+  --surface-2: #2459a0;
   --ink: #ffffff;
-  --muted: #a9b8d0;
-  --line: #22406e;
-  --court: #0b2a5b;
+  --muted: #c9d8ee;
+  --line: #3a6db3;
+  --court: #1b4f8f;
   --court-2: #d4af37;
   --court-ink: #ffffff;
-  --court-tint: #1a3767;
+  --court-tint: #2a63ad;
   --ball: #d8ef32;
   --ball-ink: #13200a;
   --gold: #d4af37;
   --gold-2: #f3dc8a;
-  --ok: #5fd49a;
+  --ok: #74e3ab;
   --ok-tint: #0f3527;
   --warn: #f3c25b;
   --warn-tint: #3a2c0b;
-  --danger: #ff8a80;
+  --danger: #ffa59c;
   --danger-tint: #3d1715;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(5, 20, 45, 0.3), 0 6px 18px rgba(5, 20, 45, 0.25);
   color-scheme: dark;
 }
 body {
@@ -30,7 +30,7 @@ body {
 
 /* Kopfzeile und Hero mit Gold */
 .mx-app .topbar {
-  background: linear-gradient(180deg, #0b2a5b, #08204a);
+  background: linear-gradient(180deg, #2160ad, #1b5096);
   border-bottom: 1px solid rgba(212, 175, 55, 0.45);
 }
 .mx-app .brand-name {
@@ -46,7 +46,7 @@ body {
   height: 48px;
 }
 .mx-hero {
-  background: radial-gradient(120% 140% at 100% 0%, #173a75 0%, #0b2a5b 45%, #071a3a 100%);
+  background: radial-gradient(120% 140% at 100% 0%, #3274c6 0%, #1f58a0 45%, #174584 100%);
   border: 1px solid rgba(212, 175, 55, 0.5);
 }
 .mx-hero .hero-title {
@@ -105,7 +105,7 @@ body {
   background: rgba(212, 175, 55, 0.18);
 }
 .tabbar {
-  background: #081a38;
+  background: #143f78;
   border-top-color: rgba(212, 175, 55, 0.35);
 }
 .tab.is-active {
@@ -354,7 +354,7 @@ select.text-input {
 .mx-tv {
   min-height: 100vh;
   padding: 2vw;
-  background: radial-gradient(120% 100% at 100% 0%, #173a75 0%, #071428 60%);
+  background: radial-gradient(120% 100% at 100% 0%, #3274c6 0%, #15427e 60%);
   color: #ffffff;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -433,7 +433,7 @@ select.text-input {
   gap: 0.5vw;
   padding: 1.2vw;
   border-radius: 14px;
-  background: rgba(14, 33, 66, 0.9);
+  background: rgba(27, 77, 141, 0.92);
   border: 1px solid var(--line);
 }
 .mx-tv-match.is-done {

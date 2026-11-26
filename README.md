@@ -62,9 +62,56 @@ Die normale App bleibt davon unberührt.
 
 ## TJ Padel Masters am 29.11.2026 (eigene App)
 
-`https://tigraef.github.io/Padel-Turnier/masters/` (Teilnehmer: `…/masters/?ansicht`). Sonntag, 11:00–14:00 Uhr bei Hanse Padel.
-8 Teams, 4 Courts parallel, 7 Runden jeder gegen jeden (28 Matches, niemand setzt aus), max. 8 Games, Pause nach Runde 4.
-Danach Platzierungsspiele 1–2, 3–4, 5–6, 7–8 als Best of 7 oder Best of 9 (in der App umschaltbar) – oder „Keine Zeit“,
-dann zählt die Abschlusstabelle. Aufbau und Look wie die Turnier-App, Code in `src/masters/` (Teams, Courts, Zeiten in
-`src/masters/logic.js`), Build `npm run build:masters` (ES5, läuft auch auf alten iPads). Abgleich über denselben Token,
-aber eigene Datei `masters.json`.
+Sonntag, 29.11.2026, 11:00–14:00 Uhr, Hanse Padel Hamburg. 8 Teams, Courts D6–D9, 7 Runden jeder gegen jeden
+(verbindlicher Spielplan, die Lobster immer auf D8), danach optionale Platzierungsspiele.
+
+| Wer | Adresse |
+| --- | --- |
+| Turnierleitung | `https://tigraef.github.io/Padel-Turnier/masters/` |
+| Teilnehmer (nur lesen) | `https://tigraef.github.io/Padel-Turnier/masters/?ansicht` |
+| Fernseher/Tablet vor Ort | `https://tigraef.github.io/Padel-Turnier/masters/?ansicht&tv` |
+
+Code in `src/masters/` (`logic.js` = Teams, Spielplan, Zeitplan, Tabelle, Platzierungsspiele, Timer, CSV;
+`sync.js` = Abgleich; `App.jsx` = Oberfläche), Tests in `tests/masters.test.js`, Build `npm run build:masters`
+(ES5, läuft auch auf alten iPads).
+
+### Daten und Echtzeit-Abgleich
+
+Alle Daten liegen als `masters-2911.json` auf dem Branch `turnier-daten` dieses Repositorys – das ist die zentrale,
+dauerhafte Ablage. Jedes Gerät speichert zusätzlich sofort lokal (bleibt beim Neuladen und ohne Netz erhalten) und
+gleicht alle 8 Sekunden ab, die Teilnehmer-Ansicht alle 15 Sekunden. Jeder Eintrag (Ergebnis, Platzierungsspiel,
+Teamname, Uhrzeit, Timer …) trägt einen Zeitstempel; beim Zusammenführen gewinnt pro Eintrag die jüngere Änderung.
+Zwei Geräte, die gleichzeitig verschiedene Spiele eintragen, überschreiben sich also nie. Bestätigte Ergebnisse sind
+gesperrt und lassen sich nur über „Korrigieren“ wieder ändern.
+
+Trennung Turnierleitung/Teilnehmer: Schreiben kann nur, wer den GitHub-Token hat. Der Teilnehmer-Link zeigt nur
+bestätigte Ergebnisse und hat keine Eingabefelder und keinen Admin-Bereich.
+
+### Einrichtung (einmalig, ca. 5 Minuten)
+
+1. GitHub → Settings → Developer settings → Fine-grained tokens → „Generate new token“.
+   Repository access: „Only select repositories“ → `Padel-Turnier`. Permissions → Contents: **Read and write**.
+   Ablauf: mindestens bis 30.11.2026.
+2. Auf jedem Handy/Tablet der Turnierleitung `…/masters/` öffnen → Tab „Admin“ → Token einfügen → „Verbinden“.
+   (Wer den Token schon in einer anderen Turnier-App eingetragen hat, ist automatisch verbunden.)
+3. Im Admin-Bereich Teamnamen und Uhrzeiten prüfen. Den Teilnehmer-Link dort kopieren und in die Gruppe schicken.
+4. Optional: auf dem Fernseher/Tablet `…/masters/?ansicht&tv` öffnen (oder in der Übersicht „Vollbild / TV-Ansicht“).
+
+### Veröffentlichen
+
+Jeder Push auf `ccr-fe9e2b6d-oqp0u9` oder `main` baut über `.github/workflows/pages.yml` alle Apps (inklusive Tests)
+und veröffentlicht sie auf GitHub Pages (Settings → Pages → Source: GitHub Actions). Lokal: `npm install`,
+`npm test`, `npm run dev` und dann `http://localhost:5173/masters.html` öffnen.
+
+### Am Turniertag
+
+- Übersicht → „Runde 1 starten“ startet den 20-Minuten-Timer auf allen Geräten. Nach Ablauf piept es (Ton auf dem
+  Gerät einmal antippen, damit der Browser ihn erlaubt). Der Timer schließt kein Spiel ab.
+- Ergebnisse unter „Spielplan“ (Runden, Courts oder Teams) eintragen und bestätigen. Weniger als 8 Games nur mit
+  „Abbruch bestätigen“.
+- Nach Runde 4: „Pause starten (10 min)“. Zeit mit −5/−1/+1/+5 min anpassen.
+- Nach Runde 7 erscheinen die Platzierungsspiele (D8 Finale, D7 3/4, D6 5/6, D9 7/8). „Spiel starten“, Stand
+  eintragen (keine Begrenzung), „Beenden & bestätigen“; bei Gleichstand Sieger antippen. Oder „Überspringen“ –
+  dann zählt die Tabelle. „Turnier jetzt abschließen“ wertet nicht gespielte Paare nach Tabelle.
+- Export im Admin-Bereich: Ergebnisse und Abschlusstabelle als CSV, Text zum Teilen, Backup.
+- Drucken: Spielplan bzw. Court-Plan (DIN A4) im Tab „Spielplan“, Ergebnis im Tab „Ergebnis“.

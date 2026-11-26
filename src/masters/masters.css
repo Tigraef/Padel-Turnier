@@ -1,4 +1,139 @@
-/* TJ Padel Masters: Ergänzungen zum gemeinsamen Stil (4 Courts statt 3). */
+/* TJ Padel Masters: Dunkelblau als Hauptfarbe, goldene Akzente, weiße Schrift, Ball-Neongelb als Signal. */
+:root[data-theme='dark'] {
+  --bg: #071428;
+  --surface: #0e2142;
+  --surface-2: #132a52;
+  --ink: #ffffff;
+  --muted: #a9b8d0;
+  --line: #22406e;
+  --court: #0b2a5b;
+  --court-2: #d4af37;
+  --court-ink: #ffffff;
+  --court-tint: #1a3767;
+  --ball: #d8ef32;
+  --ball-ink: #13200a;
+  --gold: #d4af37;
+  --gold-2: #f3dc8a;
+  --ok: #5fd49a;
+  --ok-tint: #0f3527;
+  --warn: #f3c25b;
+  --warn-tint: #3a2c0b;
+  --danger: #ff8a80;
+  --danger-tint: #3d1715;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* Kopfzeile und Hero mit Gold */
+.mx-app .topbar {
+  background: linear-gradient(180deg, #0b2a5b, #08204a);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.45);
+}
+.mx-app .brand-name {
+  color: var(--gold-2);
+}
+.mx-logo-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+}
+.mx-logo.is-big {
+  width: 48px;
+  height: 48px;
+}
+.mx-hero {
+  background: radial-gradient(120% 140% at 100% 0%, #173a75 0%, #0b2a5b 45%, #071a3a 100%);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+}
+.mx-hero .hero-title {
+  color: #ffffff;
+}
+.mx-hero .eyebrow {
+  color: var(--gold-2);
+  opacity: 1;
+}
+.mx-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mx-countdown {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1;
+  color: var(--gold-2);
+}
+.mx-countdown.is-over {
+  color: var(--danger);
+}
+.mx-hero-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.section-title {
+  color: var(--gold-2);
+}
+.btn-primary {
+  background: var(--gold);
+  color: #1b1503;
+  border-color: var(--gold);
+}
+.btn-warn {
+  background: var(--warn-tint);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+.btn {
+  min-height: 46px;
+}
+.btn-sm {
+  min-height: 40px;
+}
+.court-badge {
+  background: var(--court-tint);
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  color: var(--gold-2);
+}
+.court-badge.court-D8 {
+  background: rgba(212, 175, 55, 0.18);
+}
+.tabbar {
+  background: #081a38;
+  border-top-color: rgba(212, 175, 55, 0.35);
+}
+.tab.is-active {
+  color: var(--gold-2);
+}
+.mx-tabs-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+.mx-tabs-6 .tab {
+  font-size: 10.5px;
+}
+.chip-entered {
+  background: rgba(216, 239, 50, 0.14);
+  color: var(--ball);
+}
+.text-input,
+select.text-input {
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  min-height: 44px;
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  font: inherit;
+  width: 100%;
+}
+
+/* Courts: 4 nebeneinander, auf dem Handy 2×2 */
 .mx-court-row {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -15,8 +150,192 @@
 .mx-pause {
   padding: 10px 14px;
   border-radius: var(--r-sm);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px dashed var(--gold);
+  color: var(--gold-2);
+}
+
+/* Nächste Begegnungen und Zeitplan */
+.mx-next,
+.mx-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.mx-next li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
   background: var(--surface);
-  border: 1px dashed var(--line);
+  border: 1px solid var(--line);
+}
+.mx-next .players {
+  display: block;
+}
+.mx-timeline li {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 12px;
+  padding: 6px 12px;
+  border-left: 3px solid var(--line);
+}
+.mx-timeline li.is-now {
+  border-left-color: var(--ball);
+  background: rgba(216, 239, 50, 0.07);
+}
+.mx-timeline li.is-done {
+  opacity: 0.6;
+}
+.mx-timeline-pause {
+  grid-column: 1 / -1;
+  color: var(--gold-2);
+  font-size: 14px;
+}
+
+/* Timer */
+.mx-timer .timer-clock {
+  color: var(--gold-2);
+}
+.mx-adjust {
+  flex-wrap: wrap;
+}
+.mx-timer-starts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mx-final-timer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mx-num-input {
+  width: 80px !important;
+}
+
+/* Filter, Team-Ansicht, Admin */
+.mx-filters,
+.mx-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.mx-filters label,
+.mx-times label {
+  display: grid;
+  gap: 4px;
+}
+.mx-team-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+}
+.mx-team-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--gold-2);
+}
+.mx-team-rank {
+  display: grid;
+  justify-items: end;
+}
+.mx-team-rank .num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+}
+.mx-win {
+  color: var(--ok);
+  font-weight: 700;
+}
+.mx-loss {
+  color: var(--danger);
+}
+.mx-team-edit {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.mx-team-nr {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--gold);
+  width: 22px;
+}
+.mx-team-fields {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+}
+.mx-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.mx-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* Tabelle: Platz 1–3 hervorheben */
+.mx-standings tr.mx-pos-1 td {
+  background: rgba(212, 175, 55, 0.16);
+}
+.mx-standings tr.mx-pos-2 td {
+  background: rgba(192, 204, 218, 0.1);
+}
+.mx-standings tr.mx-pos-3 td {
+  background: rgba(205, 127, 50, 0.12);
+}
+.mx-rank-1 {
+  background: var(--gold) !important;
+  color: #1b1503 !important;
+}
+.mx-rank-2 {
+  background: #c0ccda !important;
+  color: #0b1a33 !important;
+}
+.mx-rank-3 {
+  background: #cd7f32 !important;
+  color: #1a0d02 !important;
+}
+.mx-final-row td {
+  color: var(--gold-2);
+}
+
+/* Turnierergebnis */
+.mx-winner {
+  text-align: center;
+  padding: 18px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--gold);
+  background: radial-gradient(100% 120% at 50% 0%, rgba(212, 175, 55, 0.25), transparent 70%);
+}
+.mx-winner-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 8vw, 48px);
+  color: var(--gold-2);
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 /* Verbindungsanzeige oben: grün = online, rot = keine Verbindung */
@@ -29,4 +348,214 @@
 .mx-conn-down .sync-dot {
   background: #ff3b30;
   animation: pulse 1s ease-in-out infinite alternate;
+}
+
+/* TV-/Vollbild-Ansicht */
+.mx-tv {
+  min-height: 100vh;
+  padding: 2vw;
+  background: radial-gradient(120% 100% at 100% 0%, #173a75 0%, #071428 60%);
+  color: #ffffff;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 2vw;
+}
+.mx-tv-head {
+  display: flex;
+  align-items: center;
+  gap: 1.5vw;
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 1vw;
+}
+.mx-tv-head .mx-logo {
+  width: 5vw;
+  height: 5vw;
+  min-width: 48px;
+  min-height: 48px;
+}
+.mx-tv-title {
+  flex: 1;
+}
+.mx-tv-title h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(28px, 4vw, 72px);
+  text-transform: uppercase;
+  color: var(--gold-2);
+  line-height: 1;
+}
+.mx-tv-title p {
+  font-size: clamp(14px, 1.4vw, 26px);
+  color: var(--muted);
+}
+.mx-tv-clock {
+  display: grid;
+  justify-items: end;
+}
+.mx-tv-clock .label {
+  font-size: clamp(14px, 1.3vw, 24px);
+  color: var(--gold-2);
+}
+.mx-tv-clock .num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(48px, 7vw, 140px);
+  line-height: 1;
+}
+.mx-tv-clock .num.is-over {
+  color: var(--danger);
+}
+.mx-tv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+}
+@media (max-width: 900px) {
+  .mx-tv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.mx-tv-h {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(20px, 2.2vw, 40px);
+  text-transform: uppercase;
+  color: var(--gold-2);
+  margin-bottom: 1vw;
+}
+.mx-tv-matches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1vw;
+}
+.mx-tv-match {
+  display: grid;
+  gap: 0.5vw;
+  padding: 1.2vw;
+  border-radius: 14px;
+  background: rgba(14, 33, 66, 0.9);
+  border: 1px solid var(--line);
+}
+.mx-tv-match.is-done {
+  border-color: var(--gold);
+}
+.mx-tv-court {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(18px, 2vw, 36px);
+  color: var(--ball);
+}
+.mx-tv-label {
+  color: var(--gold-2);
+  font-weight: 700;
+}
+.mx-tv-team {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: clamp(16px, 1.6vw, 30px);
+  font-weight: 600;
+}
+.mx-tv-team b {
+  font-family: var(--font-display);
+  font-size: 1.4em;
+}
+.mx-standings.is-compact {
+  font-size: clamp(14px, 1.3vw, 24px);
+}
+.mx-tv-exit {
+  opacity: 0.6;
+}
+
+/* Druck (DIN A4): Spielplan, Court-Plan oder Ergebnisliste */
+.mx-print {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .mx-print {
+    display: block !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    white-space: normal !important;
+    color: #000000;
+  }
+  .mx-print pre {
+    font-family: ui-monospace, Menlo, monospace;
+    white-space: pre-wrap;
+    font-size: 10pt;
+  }
+  .mx-print-sheet h1 {
+    font-size: 20pt;
+    margin: 0 0 4pt;
+  }
+  .mx-print-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10pt 0;
+    font-size: 11pt;
+  }
+  .mx-print-sheet th,
+  .mx-print-sheet td {
+    border: 1px solid #555555;
+    padding: 6pt;
+    text-align: left;
+    vertical-align: top;
+  }
+  .mx-print-score {
+    white-space: nowrap;
+    font-size: 14pt;
+    text-align: center !important;
+  }
+}
+
+/* Einfache Ergebnistabellen (Team-Ansicht, alle Ergebnisse) */
+.mx-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--surface);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.mx-results-table th,
+.mx-results-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.mx-results-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.mx-results-table td.num,
+.mx-results-table th:last-child {
+  white-space: nowrap;
+}
+.mx-results-table .players {
+  display: block;
+}
+.standings.is-compact .c-team {
+  width: auto;
+  min-width: 16vw;
+  max-width: none;
+}
+.team-name,
+.tile-team-name,
+.mx-tv-team {
+  overflow-wrap: break-word;
+  word-break: normal;
+  -webkit-hyphens: auto;
+  hyphens: auto;
 }

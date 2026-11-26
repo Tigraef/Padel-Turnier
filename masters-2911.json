@@ -2,7 +2,7 @@
  "v": 2,
  "stamps": {
   "results/r1-D7": 1795707338528,
-  "results/r1-D6": 1795707390455,
+  "results/r1-D6": 1795707400642,
   "settings/rounds/1": 1795707358592,
   "settings/timer": 1795707361625
  },
@@ -16,8 +16,8 @@
   "r1-D6": {
    "a": 5,
    "b": 2,
-   "confirmed": true,
-   "short": true
+   "confirmed": false,
+   "short": false
   }
  },
  "finals": {},
@@ -36,5 +36,5 @@
    "total": 1200000
   }
  },
- "savedAt": "2026-11-26T15:36:30.496Z"
+ "savedAt": "2026-11-26T15:36:41.478Z"
 }

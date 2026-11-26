@@ -1,55 +1,51 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TOURNAMENT,
-  TEAMS,
-  TEAM_BY_ID,
   COURTS,
   SCHEDULE,
   FINALS,
   ROUNDS,
-  GROUP_MAX_GAMES,
   MATCHES_PER_ROUND,
-  FINAL_FORMATS,
-  FORMAT_KEY,
-  finalMaxGames,
-  pauseTime,
-  roundStartTime,
+  GROUP_GAMES,
+  DEFAULT_TIMES,
+  DEFAULT_TEAMS,
+  resolveTeams,
+  teamMap,
+  resolveTimes,
+  timeline,
+  toClock,
+  isClock,
+  berlinMinutes,
   validateSchedule,
   validateGroupScore,
   isConfirmedGroup,
+  groupMatchStatus,
   computeStandings,
   groupProgress,
   currentRound,
+  finalsMode,
   finalPairings,
   finalMatchState,
   finalRanking,
-  finalsSkipped,
   formatDiff,
+  timerOps,
+  timerRemaining,
   exportText,
+  resultsCsv,
+  standingsCsv,
 } from './logic.js';
-import { useTournamentStore, initialState, parseBackup, ROUND_MS } from '../store.js';
-import { applyChange, clearAll, replaceAll, pickShared, useViewerFeed, testConnection, DEFAULT_SYNC } from '../sync.js';
-import { useMastersSync, MASTERS_FILE } from './sync.js';
+import { useTournamentStore, initialState, parseBackup } from '../store.js';
+import { applyChange, clearAll, replaceAll, pickShared, useMastersSync, useMastersViewer, testConnection, MASTERS_FILE } from './sync.js';
 
-// TJ Padel Masters (29.11.2026) – aufgebaut wie die Turnier-App vom 16.10., aber mit 8 Teams auf 4 Courts.
-const STORE_KEY = 'padel-masters-2026-11-29';
-const VIEW_KEY = 'padel-masters-2026-11-29-ansicht';
+// TJ Padel Masters (29.11.2026). Turnierleitung: …/Padel-Turnier/masters/ · Teilnehmer: …/masters/?ansicht · TV: …/masters/?ansicht&tv
+const STORE_KEY = 'padel-masters-2911';
+const VIEW_KEY = 'padel-masters-2911-ansicht';
 const ROUND_LIST = Array.from({ length: ROUNDS }, (_, i) => i + 1);
-const PAUSE = pauseTime();
+const MIN = 60 * 1000;
 
-// Nur-Ansicht für Teilnehmer: …/Padel-Turnier/masters/?ansicht
 const ReadOnly = createContext(false);
+const Data = createContext(null); // { teams, byId, times, tl }
 const viewerUrl = () => `${location.origin}${location.pathname}?ansicht`;
-
-const TABS = [
-  { id: 'start', label: 'Übersicht', icon: 'home' },
-  { id: 'spielplan', label: 'Spielplan', icon: 'grid' },
-  { id: 'tabelle', label: 'Tabelle', icon: 'table' },
-  { id: 'finale', label: 'Finale', icon: 'trophy' },
-  { id: 'ehrung', label: 'Ehrung', icon: 'medal' },
-];
-
-const courtSide = Object.fromEntries(COURTS.map((c) => [c.id, c.side]));
 const inFrame = (() => {
   try {
     return window.self !== window.top;
@@ -58,182 +54,343 @@ const inFrame = (() => {
   }
 })();
 
-function readHash() {
+const TABS = [
+  { id: 'start', label: 'Übersicht', icon: 'home' },
+  { id: 'spielplan', label: 'Spielplan', icon: 'grid' },
+  { id: 'tabelle', label: 'Tabelle', icon: 'table' },
+  { id: 'finale', label: 'Finale', icon: 'trophy' },
+  { id: 'ergebnis', label: 'Ergebnis', icon: 'medal' },
+  { id: 'admin', label: 'Admin', icon: 'gear', admin: true },
+];
+
+function readHash(readOnly) {
   const h = (typeof location !== 'undefined' ? location.hash : '').replace('#', '');
-  return TABS.some((t) => t.id === h) ? h : 'start';
+  return TABS.some((t) => t.id === h && !(t.admin && readOnly)) ? h : 'start';
 }
 
-export default function App({ readOnly = false }) {
+const masterInitial = () => ({ ...initialState(), settings: {}, showPlayers: true });
+
+export default function App({ readOnly = false, tv = false }) {
   const [state, setState] = useTournamentStore(readOnly ? VIEW_KEY : STORE_KEY);
-  const [tab, setTabState] = useState(readHash);
-  const [planRound, setPlanRound] = useState(null);
-  const [sheet, setSheet] = useState(null); // 'export' | 'reset' | null
+  const [tab, setTabState] = useState(() => readHash(readOnly));
+  const [sheet, setSheet] = useState(null);
+  const [printJob, setPrintJob] = useState(null);
+  const [tvMode, setTvMode] = useState(tv);
+  const online = useOnline();
+  const now = useNow(1000);
 
   useEffect(() => {
-    const onHash = () => setTabState(readHash());
+    const onHash = () => setTabState(readHash(readOnly));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [readOnly]);
 
   const setTab = (id) => {
     setTabState(id);
     try {
-      history.replaceState(null, '', `#${id}`);
+      history.replaceState(null, '', `${location.search}#${id}`);
     } catch {
       /* ignorieren */
     }
     window.scrollTo({ top: 0 });
   };
 
-  const scheduleCheck = useMemo(() => validateSchedule(), []);
-  const { results, finals, manualTies, showPlayers } = state;
+  const results = state.results || {};
+  const finals = state.finals || {};
+  const manualTies = state.manualTies || {};
+  const settings = state.settings || {};
+  const showPlayers = state.showPlayers !== false;
+
+  const teams = useMemo(() => resolveTeams(settings), [settings]);
+  const byId = useMemo(() => teamMap(teams), [teams]);
+  const times = useMemo(() => resolveTimes(settings), [settings]);
+  const tl = useMemo(() => timeline(times), [times]);
+  const data = { teams, byId, times, tl };
 
   const update = (patch) => setState((s) => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }));
   const change = (section) => (key, value) => setState((s) => ({ ...s, ...applyChange(pickShared(s), section, key, value) }));
   const setResult = change('results');
   const setFinal = change('finals');
   const setManualTie = change('manualTies');
+  const setSetting = change('settings');
   // readOnly ändert sich während der Laufzeit nie, daher ist der bedingte Hook-Aufruf stabil.
-  const sync = readOnly ? useViewerFeed(setState, MASTERS_FILE) : useMastersSync(state, setState);
+  const sync = readOnly ? useMastersViewer(setState) : useMastersSync(state, setState);
 
-  const online = useOnline();
-  const ctx = { state, results, finals, manualTies, showPlayers, setResult, setFinal, setManualTie, setTab, update };
-  const round = currentRound(results);
+  const timer = settings.timer || null;
+  const setTimer = (t) => setSetting('timer', t);
+  useTimerAlarm(timer, now, !readOnly);
+
+  const print = (job) => {
+    setPrintJob(job);
+    setTimeout(() => window.print(), 50);
+  };
+
+  const ctx = { state, results, finals, manualTies, settings, showPlayers, setResult, setFinal, setManualTie, setSetting, setTab, update, timer, setTimer, now, print };
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('mx-tv-mode', tvMode);
+  }, [tvMode]);
+
+  if (tvMode) {
+    return (
+      <ReadOnly.Provider value={true}>
+        <Data.Provider value={data}>
+          <TvBoard {...ctx} sync={sync} online={online} onExit={() => exitTv(setTvMode)} />
+        </Data.Provider>
+      </ReadOnly.Provider>
+    );
+  }
+
+  const tabs = TABS.filter((t) => !(t.admin && readOnly));
 
   return (
     <ReadOnly.Provider value={readOnly}>
-    <div className={`app ${readOnly ? 'is-readonly' : ''}`}>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <button className="brand" onClick={() => setTab('start')} aria-label="Zur Übersicht">
-            <BallMark />
-            <span className="brand-text">
-              <span className="brand-name">TJ Masters</span>
-              <span className="brand-sub">29.11. · 11–14 Uhr</span>
-            </span>
-          </button>
-          <label className="switch" htmlFor="toggle-players">
-            <input
-              id="toggle-players"
-              type="checkbox"
-              checked={showPlayers}
-              onChange={(e) => update({ showPlayers: e.target.checked })}
-            />
-            <span className="switch-track" aria-hidden="true" />
-            <span className="switch-label">Spieler</span>
-          </label>
-          {readOnly ? (
-            <LiveBadge status={sync.status} online={online} onClick={sync.refresh} />
-          ) : (
-            !inFrame && <SyncBadge status={sync.status} online={online} onClick={() => setSheet('sync')} />
+      <Data.Provider value={data}>
+        <div className={`app mx-app ${readOnly ? 'is-readonly' : ''}`}>
+          <header className="topbar">
+            <div className="topbar-inner">
+              <button className="brand" onClick={() => setTab('start')} aria-label="Zur Übersicht">
+                <Logo />
+                <span className="brand-text">
+                  <span className="brand-name">TJ Masters</span>
+                  <span className="brand-sub">29.11. · 11–14 Uhr</span>
+                </span>
+              </button>
+              <label className="switch" htmlFor="toggle-players">
+                <input id="toggle-players" type="checkbox" checked={showPlayers} onChange={(e) => update({ showPlayers: e.target.checked })} />
+                <span className="switch-track" aria-hidden="true" />
+                <span className="switch-label">Spieler</span>
+              </label>
+              {readOnly ? (
+                <SyncBadge status={sync.status} online={online} label="Live" onClick={sync.refresh} />
+              ) : (
+                !inFrame && <SyncBadge status={sync.status} online={online} onClick={() => setTab('admin')} />
+              )}
+            </div>
+          </header>
+
+          <main className="wrap main">
+            {tab === 'start' && <Dashboard {...ctx} onTv={() => enterTv(setTvMode)} />}
+            {tab === 'spielplan' && <Schedule {...ctx} />}
+            {tab === 'tabelle' && <Standings {...ctx} />}
+            {tab === 'finale' && <Finals {...ctx} />}
+            {tab === 'ergebnis' && <Result {...ctx} />}
+            {tab === 'admin' && !readOnly && <Admin {...ctx} sync={sync} onExport={() => setSheet('export')} onReset={() => setSheet('reset')} />}
+          </main>
+
+          <nav className="tabbar" aria-label="Bereiche">
+            <div className={`tabbar-inner mx-tabs-${tabs.length}`}>
+              {tabs.map((t) => (
+                <button key={t.id} className={`tab ${tab === t.id ? 'is-active' : ''}`} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}>
+                  <Icon name={t.icon} />
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          {sheet === 'export' && (
+            <ExportSheet state={state} onClose={() => setSheet(null)} onRestore={(s) => setState((cur) => ({ ...cur, ...replaceAll(pickShared(cur), s) }))} />
           )}
-        </div>
-      </header>
+          {sheet === 'reset' && (
+            <ResetDialog
+              onCancel={() => setSheet(null)}
+              onConfirm={() => {
+                setState((cur) => ({ ...masterInitial(), showPlayers: cur.showPlayers, ...clearAll(pickShared(cur)) }));
+                setSheet(null);
+                setTab('start');
+              }}
+            />
+          )}
 
-
-      {!scheduleCheck.ok && (
-        <div className="wrap">
-          <div className="alert alert-danger" role="alert">
-            <strong>Spielplan fehlerhaft:</strong>{' '}
-            {scheduleCheck.checks
-              .filter((c) => !c.ok)
-              .map((c) => `${c.label} (${c.detail})`)
-              .join(' · ')}
+          <div className="print-only print-report mx-print">
+            <PrintArea job={printJob} state={state} />
           </div>
         </div>
-      )}
-
-      <main className="wrap main">
-        {tab === 'start' && (
-          <Dashboard
-            {...ctx}
-            round={round}
-            scheduleCheck={scheduleCheck}
-            onOpenPlan={(r) => {
-              setPlanRound(r);
-              setTab(r === 'finals' ? 'finale' : 'spielplan');
-            }}
-            onExport={() => setSheet('export')}
-            onReset={() => setSheet('reset')}
-            onSync={inFrame ? null : () => setSheet('sync')}
-            setTab={setTab}
-            syncOn={!!sync.config?.token}
-          />
-        )}
-        {tab === 'spielplan' && <Schedule {...ctx} round={round} planRound={planRound} setPlanRound={setPlanRound} />}
-        {tab === 'tabelle' && <Standings {...ctx} round={round} />}
-        {tab === 'finale' && <Finals {...ctx} />}
-        {tab === 'ehrung' && <Awards {...ctx} onExport={readOnly ? null : () => setSheet('export')} />}
-      </main>
-
-      <nav className="tabbar" aria-label="Bereiche">
-        <div className="tabbar-inner">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab ${tab === t.id ? 'is-active' : ''}`}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'page' : undefined}
-            >
-              <Icon name={t.icon} />
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {sheet === 'export' && <ExportSheet state={state} onClose={() => setSheet(null)} onRestore={(s) => setState((cur) => ({ ...cur, ...replaceAll(pickShared(cur), s) }))} />}
-      {sheet === 'sync' && <SyncSheet sync={sync} onClose={() => setSheet(null)} />}
-      {sheet === 'reset' && (
-        <ResetDialog
-          onCancel={() => setSheet(null)}
-          onConfirm={() => {
-            setState((cur) => ({ ...initialState(), showPlayers: cur.showPlayers, ...clearAll(pickShared(cur)) }));
-            setSheet(null);
-            setTab('start');
-          }}
-        />
-      )}
-
-      <pre className="print-only print-report">{exportText(state)}</pre>
-    </div>
+      </Data.Provider>
     </ReadOnly.Provider>
   );
 }
 
+function enterTv(setTvMode) {
+  setTvMode(true);
+  try {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } catch {
+    /* Vollbild nicht verfügbar */
+  }
+}
+
+function exitTv(setTvMode) {
+  setTvMode(false);
+  try {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  } catch {
+    /* ignorieren */
+  }
+}
+
+/* ---------------- Hooks ---------------- */
+
+function useNow(ms) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+/** Verfolgt, ob das Gerät laut Browser online ist (reagiert sofort auf Flugmodus/WLAN-Verlust). */
+function useOnline() {
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
+  }, []);
+  return online;
+}
+
+// Audio darf erst nach einer Berührung starten – deshalb beim ersten Tippen freischalten.
+let audioCtx = null;
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch {
+    audioCtx = null;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', unlockAudio, { once: false, passive: true });
+}
+
+function beep() {
+  const ctx = audioCtx;
+  if (!ctx) return;
+  try {
+    [0, 0.35, 0.7, 1.05].forEach((offset) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
+      g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + offset + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.25);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + offset);
+      o.stop(ctx.currentTime + offset + 0.3);
+    });
+  } catch {
+    /* Audio nicht verfügbar */
+  }
+}
+
+/** Signal bei Ablauf – einmal pro Timerlauf. Der Timer schließt keine Begegnung ab. */
+function useTimerAlarm(timer, now, enabled) {
+  const fired = useRef(null);
+  const rem = timerRemaining(timer, now);
+  useEffect(() => {
+    if (!timer || !timer.running) return;
+    const id = `${timer.phase}-${timer.round}-${timer.endsAt}`;
+    if (rem === 0 && fired.current !== id) {
+      fired.current = id;
+      beep();
+      try {
+        navigator.vibrate?.([300, 150, 300]);
+      } catch {
+        /* nicht unterstützt */
+      }
+    }
+  }, [timer, rem, enabled]);
+}
+
+/* ---------------- Timer-Logik ---------------- */
+
+const fmtMs = (ms) => {
+  const s = Math.ceil(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
+
+function phaseLabel(timer) {
+  if (!timer) return 'Kein Timer';
+  if (timer.phase === 'pause') return 'Pause';
+  if (timer.phase === 'finals') return 'Platzierungsspiele';
+  return `Runde ${timer.round}`;
+}
+
+/** Turniertag in Berlin: vorher, währenddessen, danach. */
+function dayInfo(now, tl) {
+  let date = '';
+  try {
+    date = new Intl.DateTimeFormat('en-CA', { timeZone: TOURNAMENT.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+  } catch {
+    date = new Date(now).toISOString().slice(0, 10);
+  }
+  const mins = berlinMinutes(new Date(now));
+  if (date < TOURNAMENT.date) return { phase: 'before', text: `Start am 29.11. um ${tl.rounds[0].from} Uhr` };
+  if (date > TOURNAMENT.date) return { phase: 'after', text: 'Turnier beendet' };
+  const left = tl.end.start - mins;
+  if (mins < tl.rounds[0].start) return { phase: 'before', text: `Start um ${tl.rounds[0].from} Uhr (in ${fmtHm(tl.rounds[0].start - mins)})` };
+  if (left <= 0) return { phase: 'after', text: `Turnierende ${tl.end.from} Uhr erreicht` };
+  return { phase: 'during', text: `Noch ${fmtHm(left)} bis ${tl.end.from} Uhr`, left };
+}
+const fmtHm = (m) => {
+  const total = Math.max(0, Math.floor(m));
+  const h = Math.floor(total / 60);
+  return h ? `${h}:${String(total % 60).padStart(2, '0')} h` : `${total} min`;
+};
+
 /* ---------------- Dashboard ---------------- */
 
-function Dashboard({ results, finals, manualTies, showPlayers, state, update, round, scheduleCheck, onOpenPlan, onExport, onReset, onSync, syncOn, setTab }) {
+function Dashboard({ results, finals, manualTies, settings, showPlayers, setSetting, timer, setTimer, now, setTab, onTv }) {
   const readOnly = useContext(ReadOnly);
+  const { tl, teams, byId, times } = useContext(Data);
   const progress = groupProgress(results);
-  const ranking = finalRanking(results, finals, manualTies);
-  const maxFinal = finalMaxGames(finals);
-  const finalsDone = FINALS.filter((f) => ranking.pairings.unlocked && finalMatchState(ranking.pairings.pairings[f.id], finals[f.id], maxFinal).status === 'confirmed').length;
-  const pauseNow = round === TOURNAMENT.pauseAfterRound + 1 && SCHEDULE.filter((m) => m.round === round).every((m) => !results[m.id]);
+  const round = currentRound(results);
+  const ranking = finalRanking(results, finals, manualTies, settings, { teams });
+  const day = dayInfo(now, tl);
+  const scheduleCheck = useMemo(() => validateSchedule(), []);
   const roundMatches = round === 'finals' ? [] : SCHEDULE.filter((m) => m.round === round);
+  const nextRound = round === 'finals' ? null : round < ROUNDS ? round + 1 : null;
+  const pauseNext = round !== 'finals' && round === Number(times.pauseAfterRound) + 1 && roundMatches.every((m) => !results[m.id]);
 
   let headline;
   let sub;
-  if (round !== 'finals') {
+  if (timer && timer.running && timer.phase === 'pause') {
+    headline = 'Pause';
+    sub = tl.pause ? `${tl.pause.from}–${tl.pause.to} Uhr · danach Runde ${round}` : `danach Runde ${round}`;
+  } else if (round !== 'finals') {
     headline = `Runde ${round}`;
-    sub = pauseNow
-      ? `von ${ROUNDS} · nach der Pause, ca. ${roundStartTime(round)} Uhr`
-      : `von ${ROUNDS} · Start ca. ${roundStartTime(round)} Uhr`;
-  } else if (!ranking.complete) {
-    headline = 'Platzierungsspiele';
-    sub = ranking.pairings.unlocked ? `${finalsDone} von ${FINALS.length} bestätigt · ca. ${roundStartTime(ROUNDS + 1)} Uhr` : 'Gleichstand klären';
-  } else {
+    sub = `von ${ROUNDS} · ${tl.rounds[round - 1].from}–${tl.rounds[round - 1].to} Uhr${pauseNext ? ' · nach der Pause' : ''}`;
+  } else if (ranking.complete) {
     headline = 'Turnier beendet';
-    sub = `Sieger: ${TEAM_BY_ID[ranking.places[0].teamId].name}`;
+    sub = `Sieger: ${byId[ranking.places[0].teamId].name}`;
+  } else if (ranking.pairings.unlocked) {
+    headline = 'Platzierungsspiele';
+    sub = `ab ca. ${tl.finals.from} Uhr`;
+  } else {
+    headline = 'Auswertung';
+    sub = 'Gleichstand in der Tabelle klären';
   }
 
   return (
     <div className="stack-lg">
-      <section className="hero">
+      <section className="hero mx-hero">
         <div className="hero-court" aria-hidden="true" />
         <div className="hero-body">
-          <p className="eyebrow">{TOURNAMENT.dateLabel} · Hanse Padel · 11:00–14:00</p>
-          <h1 className="hero-title">{TOURNAMENT.name}</h1>
+          <div className="mx-hero-top">
+            <Logo big />
+            <div>
+              <p className="eyebrow">{TOURNAMENT.dateLabel} · {TOURNAMENT.venue}</p>
+              <h1 className="hero-title">{TOURNAMENT.name}</h1>
+            </div>
+          </div>
           <div className="hero-now">
             <div>
               <p className="label">Aktuell</p>
@@ -241,132 +398,257 @@ function Dashboard({ results, finals, manualTies, showPlayers, state, update, ro
               <p className="hero-sub">{sub}</p>
             </div>
             <div className="hero-progress">
-              <p className="label">Vorrunde</p>
-              <p className="hero-count">
-                <span className="num">{progress.confirmed}</span>
-                <span className="of">/{progress.total}</span>
-              </p>
-              <p className="hero-sub">Matches bestätigt</p>
+              <p className="label">Countdown</p>
+              <p className={`mx-countdown num ${timer && timerRemaining(timer, now) === 0 ? 'is-over' : ''}`}>{timer ? fmtMs(timerRemaining(timer, now)) : '--:--'}</p>
+              <p className="hero-sub">{timer ? `${phaseLabel(timer)}${timer.running ? '' : ' · angehalten'}` : 'Timer nicht gestartet'}</p>
             </div>
           </div>
           <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.confirmed}>
             <div className="bar-fill" style={{ width: `${(progress.confirmed / progress.total) * 100}%` }} />
           </div>
+          <p className="hero-sub mx-hero-meta">
+            <span>
+              Vorrunde {progress.confirmed}/{progress.total} Matches
+            </span>
+            <span>{day.text}</span>
+          </p>
           {readOnly ? (
             <button className="btn btn-ball btn-block" onClick={() => setTab('tabelle')}>
               Zur Live-Tabelle
             </button>
           ) : (
-            <button className="btn btn-ball btn-block" onClick={() => onOpenPlan(round)}>
-              {round === 'finals' ? 'Platzierungsspiele eintragen' : `Ergebnisse Runde ${round} erfassen`}
+            <button className="btn btn-ball btn-block" onClick={() => setTab(round === 'finals' ? 'finale' : 'spielplan')}>
+              {round === 'finals' ? 'Platzierungsspiele' : `Ergebnisse Runde ${round} erfassen`}
             </button>
           )}
         </div>
       </section>
 
-      {pauseNow && (
-        <div className="mx-pause">
-          <strong>Pause {PAUSE.from}–{PAUSE.to} Uhr</strong>
-          <span className="muted"> · Gebäck & Snacks · danach Runde {round}</span>
-        </div>
-      )}
+      {!readOnly && <TimerPanel timer={timer} setTimer={setTimer} now={now} round={round} settings={settings} setSetting={setSetting} />}
 
       {round !== 'finals' && (
         <section className="stack">
-          <SectionHead title={`Courts · Runde ${round}`} note="Blick vom Eingang" />
+          <SectionHead title={`Läuft gerade · Runde ${round}`} note={`${tl.rounds[round - 1].from}–${tl.rounds[round - 1].to} Uhr`} />
           <div className="court-row mx-court-row">
             {roundMatches.map((m) => (
-              <CourtTile key={m.id} match={m} result={results[m.id]} showPlayers={showPlayers} onClick={() => onOpenPlan(round)} />
+              <CourtTile key={m.id} match={m} result={results[m.id]} status={groupMatchStatus(m, results[m.id], settings)} showPlayers={showPlayers} onClick={() => setTab('spielplan')} />
             ))}
           </div>
         </section>
       )}
+
       {round === 'finals' && ranking.pairings.unlocked && !ranking.skipped && (
         <section className="stack">
-          <SectionHead title="Courts · Platzierungsspiele" note={`Best of ${maxFinal} · Blick vom Eingang`} />
+          <SectionHead title="Platzierungsspiele" note={`ab ${tl.finals.from} Uhr`} />
           <div className="court-row mx-court-row">
-            {[...FINALS]
-              .sort((a, b) => a.court.localeCompare(b.court))
-              .map((f) => {
-                const p = ranking.pairings.pairings[f.id];
-                const st = finalMatchState(p, finals[f.id], maxFinal);
-                return (
-                  <CourtTile
-                    key={f.id}
-                    match={{ court: f.court, home: p.teamA, away: p.teamB, label: f.label }}
-                    result={st.status === 'confirmed' || st.status === 'entered' ? { a: st.a, b: st.b, confirmed: st.status === 'confirmed' } : null}
-                    showPlayers={showPlayers}
-                    onClick={() => onOpenPlan('finals')}
-                  />
-                );
-              })}
+            {FINALS.map((f) => {
+              const p = ranking.pairings.pairings[f.id];
+              const st = finalMatchState(p, finals[f.id]);
+              return (
+                <CourtTile
+                  key={f.id}
+                  match={{ court: f.court, home: p.teamA, away: p.teamB, label: f.label }}
+                  result={st.status === 'done' || (!readOnly && st.status === 'running') ? { a: st.a, b: st.b } : null}
+                  status={st.status === 'stale' ? 'open' : st.status}
+                  showPlayers={showPlayers}
+                  onClick={() => setTab('finale')}
+                />
+              );
+            })}
           </div>
         </section>
       )}
 
-      {!readOnly && round !== 'finals' && <RoundTimer timer={state.timer} round={round} onChange={(timer) => update({ timer })} />}
+      {nextRound && (
+        <section className="stack">
+          <SectionHead title={`Als Nächstes · Runde ${nextRound}`} note={`${Number(times.pauseAfterRound) === round && tl.pause ? `nach der Pause · ` : ''}${tl.rounds[nextRound - 1].from} Uhr`} />
+          <ul className="mx-next">
+            {SCHEDULE.filter((m) => m.round === nextRound).map((m) => (
+              <li key={m.id}>
+                <CourtBadge court={m.court} />
+                <span>
+                  <strong>{byId[m.home].name}</strong> <span className="muted">gegen</span> <strong>{byId[m.away].name}</strong>
+                  {showPlayers && (
+                    <span className="players">
+                      {byId[m.home].players.join(' & ')} · {byId[m.away].players.join(' & ')}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="stack">
-        <SectionHead title="Teams" />
-        <ul className="team-list">
-          {TEAMS.map((t) => (
-            <li key={t.id}>
-              <span className="team-name">{t.name}</span>
-              <span className="team-players">{t.players.join(' & ')}</span>
+        <SectionHead title="Zeitplan" note="Europe/Berlin" />
+        <ul className="mx-timeline">
+          {tl.rounds.map((r) => (
+            <li key={r.round} className={round === r.round ? 'is-now' : round === 'finals' || r.round < round ? 'is-done' : ''}>
+              <span className="num">{r.from}–{r.to}</span>
+              <span>Runde {r.round}</span>
+              {tl.pause && r.round === Number(times.pauseAfterRound) && <PauseRow pause={tl.pause} />}
             </li>
           ))}
+          <li>
+            <span className="num">
+              {tl.evaluation.from}–{tl.evaluation.to}
+            </span>
+            <span>Auswertung</span>
+          </li>
+          <li>
+            <span className="num">ab {tl.finals.from}</span>
+            <span>Optionale Platzierungsspiele</span>
+          </li>
+          <li>
+            <span className="num">{tl.end.from}</span>
+            <span>Turnierende</span>
+          </li>
         </ul>
       </section>
 
-      {!readOnly && (
-      <section className="stack">
-        <SectionHead title="Spielplanprüfung" note={scheduleCheck.ok ? 'Alles in Ordnung' : 'Fehler gefunden'} />
-        <ul className="checks">
-          {scheduleCheck.checks.map((c) => (
-            <li key={c.label} className={c.ok ? 'is-ok' : 'is-bad'}>
-              <Icon name={c.ok ? 'check' : 'x'} />
-              <span>
-                {c.label}
-                <span className="muted"> · {c.detail}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      )}
-
-      {readOnly && (
-        <p className="muted small center">Live-Ansicht · Ergebnisse erscheinen, sobald die Turnierleitung sie bestätigt.</p>
-      )}
+      <div className="btn-row">
+        <button className="btn btn-ghost" onClick={onTv}>
+          <Icon name="tv" /> Vollbild / TV-Ansicht
+        </button>
+      </div>
 
       {!readOnly && (
-      <section className="stack">
-        <SectionHead
-          title="Verwaltung"
-          note={syncOn ? 'Ergebnisse werden mit dem zweiten Handy abgeglichen' : 'Ergebnisse werden automatisch auf diesem Gerät gespeichert'}
-        />
-        <div className="btn-row">
-          {onSync && (
-            <button className="btn btn-ghost" onClick={onSync}>
-              <Icon name="sync" /> {syncOn ? 'Abgleich' : 'Zweites Handy verbinden'}
-            </button>
-          )}
-          <button className="btn btn-ghost" onClick={onExport}>
-            <Icon name="share" /> Exportieren{inFrame ? '' : ' / Drucken'}
-          </button>
-          <button className="btn btn-danger-ghost" onClick={onReset}>
-            <Icon name="reset" /> Turnier zurücksetzen
-          </button>
-        </div>
-        {!inFrame && syncOn && <ViewerLink />}
-      </section>
+        <section className="stack">
+          <SectionHead title="Spielplanprüfung" note={scheduleCheck.ok ? 'Alles in Ordnung' : 'Fehler gefunden'} />
+          <ul className="checks">
+            {scheduleCheck.checks.map((c) => (
+              <li key={c.label} className={c.ok ? 'is-ok' : 'is-bad'}>
+                <Icon name={c.ok ? 'check' : 'x'} />
+                <span>
+                  {c.label}
+                  <span className="muted"> · {c.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
+
+      {readOnly && <p className="muted small center">Live-Ansicht · Ergebnisse erscheinen, sobald die Turnierleitung sie bestätigt.</p>}
     </div>
   );
 }
 
-function CourtTile({ match, result, showPlayers, onClick }) {
-  const status = matchStatus(result);
+function PauseRow({ pause }) {
+  return (
+    <span className="mx-timeline-pause">
+      <span className="num">
+        {pause.from}–{pause.to}
+      </span>{' '}
+      Gemeinsame Pause
+    </span>
+  );
+}
+
+/* ---------------- Timer ---------------- */
+
+function TimerPanel({ timer, setTimer, now, round, settings, setSetting }) {
+  const { times } = useContext(Data);
+  const [finalMinutes, setFinalMinutes] = useState(20);
+  const rem = timerRemaining(timer, now);
+  const over = timer && rem === 0;
+  const pct = timer && timer.total ? 100 - (rem / timer.total) * 100 : 0;
+  const nextRoundToStart = round === 'finals' ? null : round;
+  const roundState = nextRoundToStart ? settings[`rounds/${nextRoundToStart}`] : null;
+  const pauseDue = round !== 'finals' && round === Number(times.pauseAfterRound) + 1;
+
+  const startRound = (r) => {
+    unlockAudio();
+    setSetting(`rounds/${r}`, { started: Date.now(), ended: null });
+    setTimer(timerOps.start('round', r, Number(times.roundMinutes) || 20));
+  };
+  const endRound = (r) => {
+    setSetting(`rounds/${r}`, { ...(settings[`rounds/${r}`] || {}), ended: Date.now() });
+    if (timer && timer.phase === 'round' && timer.round === r && timer.running) setTimer(timerOps.pause(timer));
+  };
+
+  return (
+    <section className={`timer mx-timer ${over ? 'is-over' : ''} ${timer?.running ? 'is-running' : ''}`}>
+      <div className="timer-head">
+        <SectionHead title="Turniertimer" note={timer ? phaseLabel(timer) : 'bereit'} />
+      </div>
+      <div className="timer-body">
+        <p className="timer-clock num" aria-live="polite">
+          {timer ? fmtMs(rem) : fmtMs((Number(times.roundMinutes) || 20) * MIN)}
+        </p>
+        <div className="timer-actions">
+          {timer && (timer.running ? (
+            <button className="btn btn-ghost" onClick={() => setTimer(timerOps.pause(timer))}>
+              Pausieren
+            </button>
+          ) : (
+            rem > 0 && (
+              <button className="btn btn-primary" onClick={() => (unlockAudio(), setTimer(timerOps.resume(timer)))}>
+                Fortsetzen
+              </button>
+            )
+          ))}
+          {timer && (
+            <button className="btn btn-ghost" onClick={() => setTimer(timerOps.reset(timer))} disabled={!timer.running && rem === timer.total}>
+              Zurücksetzen
+            </button>
+          )}
+        </div>
+      </div>
+      {timer && (
+        <div className="btn-row tight mx-adjust">
+          {[-5, -1, 1, 5].map((d) => (
+            <button key={d} className="btn btn-ghost btn-sm" onClick={() => setTimer(timerOps.adjust(timer, d))}>
+              {d > 0 ? `+${d}` : `−${-d}`} min
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="bar thin">
+        <div className="bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      {over && <p className="timer-msg">Zeit abgelaufen – nur noch das laufende Game zu Ende spielen, dann Ergebnisse eintragen.</p>}
+      <div className="mx-timer-starts">
+        {nextRoundToStart && !(roundState?.started && !roundState?.ended) && !(pauseDue && !settings['pause/done'] && !(timer?.phase === 'pause')) && (
+          <button className="btn btn-primary" onClick={() => startRound(nextRoundToStart)}>
+            Runde {nextRoundToStart} starten ({times.roundMinutes} min)
+          </button>
+        )}
+        {nextRoundToStart && roundState?.started && !roundState?.ended && (
+          <button className="btn btn-ghost" onClick={() => endRound(nextRoundToStart)}>
+            Runde {nextRoundToStart} beenden
+          </button>
+        )}
+        {pauseDue && !(timer?.phase === 'pause') && !settings['pause/done'] && (
+          <>
+            <button className="btn btn-ball" onClick={() => (unlockAudio(), setTimer(timerOps.start('pause', null, Number(times.pauseMinutes) || 10)), setSetting('pause/done', { at: Date.now() }))}>
+              Pause starten ({times.pauseMinutes} min)
+            </button>
+            <button className="btn btn-ghost" onClick={() => setSetting('pause/done', { at: Date.now(), skipped: true })}>
+              Ohne Pause weiter
+            </button>
+          </>
+        )}
+        {round === 'finals' && (
+          <span className="mx-final-timer">
+            <label className="small" htmlFor="final-min">
+              Platzierungsspiele:
+            </label>
+            <input id="final-min" className="text-input mx-num-input" type="number" min="1" max="120" value={finalMinutes} onChange={(e) => setFinalMinutes(Math.max(1, Number(e.target.value) || 1))} />
+            <span className="small">min</span>
+            <button className="btn btn-primary" onClick={() => (unlockAudio(), setTimer(timerOps.start('finals', null, finalMinutes)))}>
+              Timer starten
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="muted small">Der Timer beendet keine Begegnung – Ergebnisse bestätigt immer die Turnierleitung.</p>
+    </section>
+  );
+}
+
+function CourtTile({ match, result, status, showPlayers, onClick }) {
   return (
     <button className={`court-tile status-${status}`} onClick={onClick}>
       <span className="court-tile-head">
@@ -383,200 +665,242 @@ function CourtTile({ match, result, showPlayers, onClick }) {
 }
 
 function TileTeam({ id, score, showPlayers }) {
+  const { byId } = useContext(Data);
   return (
     <span className="tile-team">
       <span className="tile-team-name">
-        {TEAM_BY_ID[id].name}
-        {showPlayers && <span className="players">{TEAM_BY_ID[id].players.join(' & ')}</span>}
+        {byId[id].name}
+        {showPlayers && <span className="players">{byId[id].players.join(' & ')}</span>}
       </span>
       <span className="tile-score num">{score ?? '–'}</span>
     </span>
   );
 }
 
-/* ---------------- Timer ---------------- */
-
-function RoundTimer({ timer, round, onChange }) {
-  const [now, setNow] = useState(Date.now());
-  const beeped = useRef(false);
-  const audio = useRef(null);
-  const wake = useRef(null);
-  const remaining = timer.running ? Math.max(0, timer.endsAt - now) : timer.remaining;
-
-  useEffect(() => {
-    if (!timer.running) return undefined;
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
-  }, [timer.running]);
-
-  useEffect(() => {
-    if (timer.running && remaining === 0 && !beeped.current) {
-      beeped.current = true;
-      beep(audio.current);
-      try {
-        navigator.vibrate?.([300, 150, 300]);
-      } catch {
-        /* nicht unterstützt */
-      }
-    }
-  }, [timer.running, remaining]);
-
-  const start = () => {
-    try {
-      audio.current = audio.current ?? new (window.AudioContext || window.webkitAudioContext)();
-    } catch {
-      audio.current = null;
-    }
-    navigator.wakeLock?.request?.('screen').then((l) => (wake.current = l)).catch(() => {});
-    beeped.current = remaining === 0;
-    setNow(Date.now());
-    onChange({ running: true, endsAt: Date.now() + (remaining || ROUND_MS), remaining: remaining || ROUND_MS });
-  };
-  const pause = () => {
-    wake.current?.release?.().catch(() => {});
-    onChange({ running: false, endsAt: null, remaining });
-  };
-  const reset = () => {
-    wake.current?.release?.().catch(() => {});
-    beeped.current = false;
-    onChange({ running: false, endsAt: null, remaining: ROUND_MS });
-  };
-
-  const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
-  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
-  const over = remaining === 0;
-  const pct = 100 - (remaining / ROUND_MS) * 100;
-
-  return (
-    <section className={`timer ${over ? 'is-over' : ''} ${timer.running ? 'is-running' : ''}`}>
-      <div className="timer-head">
-        <SectionHead title="Rundenuhr" note={`20 Minuten · Runde ${round}`} />
-      </div>
-      <div className="timer-body">
-        <p className="timer-clock num" aria-live="polite">
-          {mm}:{ss}
-        </p>
-        <div className="timer-actions">
-          {timer.running ? (
-            <button className="btn btn-ghost" onClick={pause}>
-              Pause
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={start}>
-              {remaining === ROUND_MS ? 'Start' : over ? 'Neu starten' : 'Weiter'}
-            </button>
-          )}
-          <button className="btn btn-ghost" onClick={reset} disabled={remaining === ROUND_MS && !timer.running}>
-            Zurücksetzen
-          </button>
-        </div>
-      </div>
-      <div className="bar thin">
-        <div className="bar-fill" style={{ width: `${pct}%` }} />
-      </div>
-      {over && <p className="timer-msg">Zeit abgelaufen – laufendes Game zu Ende spielen und Ergebnis eintragen.</p>}
-    </section>
-  );
-}
-
-function beep(ctx) {
-  if (!ctx) return;
-  try {
-    [0, 0.35, 0.7].forEach((offset) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.frequency.value = 880;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
-      g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + offset + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.25);
-      o.connect(g).connect(ctx.destination);
-      o.start(ctx.currentTime + offset);
-      o.stop(ctx.currentTime + offset + 0.3);
-    });
-  } catch {
-    /* Audio nicht verfügbar */
-  }
-}
-
 /* ---------------- Spielplan ---------------- */
 
-function Schedule({ results, setResult, showPlayers, round, planRound, setPlanRound }) {
-  const selected = planRound && planRound !== 'finals' ? planRound : round === 'finals' ? 'all' : round;
-  const rounds = selected === 'all' ? ROUND_LIST : [selected];
+function Schedule({ results, manualTies, settings, setResult, showPlayers, print }) {
+  const { tl, teams, byId, times } = useContext(Data);
+  const [view, setView] = useState('runden');
+  const [fTeam, setFTeam] = useState('');
+  const [fRound, setFRound] = useState(() => {
+    const r = currentRound(results);
+    return r === 'finals' ? 'all' : r;
+  });
+  const [fCourt, setFCourt] = useState('');
+  const [court, setCourt] = useState('D8');
+  const [teamSel, setTeamSel] = useState('t1');
+
+  const filtered = SCHEDULE.filter((m) => (fRound === 'all' || m.round === fRound) && (!fCourt || m.court === fCourt) && (!fTeam || m.home === fTeam || m.away === fTeam));
+  const rounds = [...new Set(filtered.map((m) => m.round))];
 
   return (
     <div className="stack-lg">
       <div className="page-head">
         <h2 className="page-title">Spielplan</h2>
-        <p className="muted">{ROUNDS} Runden à ca. 20 Minuten inkl. Courtwechsel · max. {GROUP_MAX_GAMES} Games · Golden Point bei 40:40 · nach Zeitablauf nur noch das laufende Game</p>
+        <p className="muted">
+          {ROUNDS} Runden à {times.roundMinutes} Minuten inkl. Courtwechsel · {GROUP_GAMES} Games pro Match · Golden Point bei 40:40
+        </p>
       </div>
-      <div className="seg" role="tablist" aria-label="Runde wählen">
-        {ROUND_LIST.map((r) => {
-          const done = SCHEDULE.filter((m) => m.round === r).every((m) => isConfirmedGroup(results[m.id]));
-          return (
-            <button
-              key={r}
-              role="tab"
-              aria-selected={selected === r}
-              className={`seg-btn ${selected === r ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
-              onClick={() => setPlanRound(r)}
-            >
-              R{r}
-              {done && <span className="seg-dot" aria-label="abgeschlossen" />}
-            </button>
-          );
-        })}
-        <button role="tab" aria-selected={selected === 'all'} className={`seg-btn ${selected === 'all' ? 'is-active' : ''}`} onClick={() => setPlanRound('all')}>
-          Alle
-        </button>
+      <div className="seg" role="tablist" aria-label="Ansicht">
+        {[
+          ['runden', 'Runden'],
+          ['courts', 'Courts'],
+          ['teams', 'Teams'],
+        ].map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={view === id} className={`seg-btn ${view === id ? 'is-active' : ''}`} onClick={() => setView(id)}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      {rounds.map((r) => (
-        <section key={r} className="stack">
-          {r === TOURNAMENT.pauseAfterRound + 1 && (
-            <div className="mx-pause">
-              <strong>Pause {PAUSE.from}–{PAUSE.to} Uhr</strong>
-              <span className="muted"> · Gebäck & Snacks</span>
-            </div>
-          )}
-          <div className="round-head">
-            <h3 className="round-title">Runde {r}</h3>
-            <span className="round-time num">{roundStartTime(r)} Uhr</span>
-            <span className="round-count muted">
-              {SCHEDULE.filter((m) => m.round === r && isConfirmedGroup(results[m.id])).length}/{MATCHES_PER_ROUND} bestätigt
-            </span>
+      {view === 'runden' && (
+        <>
+          <div className="mx-filters">
+            <label>
+              <span className="label muted">Runde</span>
+              <select className="text-input" value={fRound} onChange={(e) => setFRound(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+                <option value="all">Alle Runden</option>
+                {ROUND_LIST.map((r) => (
+                  <option key={r} value={r}>
+                    Runde {r} · {tl.rounds[r - 1].from}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="label muted">Court</span>
+              <select className="text-input" value={fCourt} onChange={(e) => setFCourt(e.target.value)}>
+                <option value="">Alle Courts</option>
+                {COURTS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="label muted">Team</span>
+              <select className="text-input" value={fTeam} onChange={(e) => setFTeam(e.target.value)}>
+                <option value="">Alle Teams</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <div className="match-list mx-match-list">
-            {SCHEDULE.filter((m) => m.round === r).map((m) => (
-              <GroupMatchCard key={m.id} match={m} result={results[m.id]} showPlayers={showPlayers} onChange={(v) => setResult(m.id, v)} />
+          {rounds.length === 0 && <p className="muted">Keine Begegnung passt zum Filter.</p>}
+          {rounds.map((r) => (
+            <section key={r} className="stack">
+              {tl.pause && r === Number(times.pauseAfterRound) + 1 && (
+                <div className="mx-pause">
+                  <strong>
+                    Gemeinsame Pause {tl.pause.from}–{tl.pause.to} Uhr
+                  </strong>
+                </div>
+              )}
+              <div className="round-head">
+                <h3 className="round-title">Runde {r}</h3>
+                <span className="round-time num">
+                  {tl.rounds[r - 1].from}–{tl.rounds[r - 1].to}
+                </span>
+                <span className="round-count muted">
+                  {SCHEDULE.filter((m) => m.round === r && isConfirmedGroup(results[m.id])).length}/{MATCHES_PER_ROUND} abgeschlossen
+                </span>
+              </div>
+              <div className="match-list mx-match-list">
+                {filtered
+                  .filter((m) => m.round === r)
+                  .map((m) => (
+                    <GroupMatchCard key={m.id} match={m} result={results[m.id]} settings={settings} showPlayers={showPlayers} onChange={(v) => setResult(m.id, v)} />
+                  ))}
+              </div>
+            </section>
+          ))}
+          <button className="btn btn-ghost" onClick={() => print({ kind: 'schedule' })}>
+            <Icon name="print" /> Spielplan drucken
+          </button>
+        </>
+      )}
+
+      {view === 'courts' && (
+        <>
+          <div className="seg" role="tablist" aria-label="Court wählen">
+            {COURTS.map((c) => (
+              <button key={c} role="tab" aria-selected={court === c} className={`seg-btn ${court === c ? 'is-active' : ''}`} onClick={() => setCourt(c)}>
+                {c}
+              </button>
             ))}
           </div>
-          {selected !== 'all' && r < ROUNDS && (
-            <button className="btn btn-ghost btn-block" onClick={() => setPlanRound(r + 1)}>
-              Weiter zu Runde {r + 1} →
-            </button>
-          )}
-        </section>
-      ))}
+          <div className="match-list mx-match-list">
+            {SCHEDULE.filter((m) => m.court === court).map((m) => (
+              <div key={m.id} className="stack mx-court-entry">
+                <p className="label muted">
+                  Runde {m.round} · {tl.rounds[m.round - 1].from}–{tl.rounds[m.round - 1].to} Uhr
+                </p>
+                <GroupMatchCard match={m} result={results[m.id]} settings={settings} showPlayers={showPlayers} onChange={(v) => setResult(m.id, v)} />
+              </div>
+            ))}
+          </div>
+          <p className="muted small">Platzierungsspiel auf {court}: {FINALS.find((f) => f.court === court)?.label} ab {tl.finals.from} Uhr</p>
+          <button className="btn btn-ghost" onClick={() => print({ kind: 'court', court })}>
+            <Icon name="print" /> Court-Plan {court} drucken (DIN A4)
+          </button>
+        </>
+      )}
+
+      {view === 'teams' && <TeamView teamId={teamSel} setTeamId={setTeamSel} results={results} manualTies={manualTies} />}
     </div>
   );
 }
 
-function matchStatus(result) {
-  if (!result || (result.a == null && result.b == null)) return 'open';
-  return result.confirmed ? 'done' : 'entered';
+function TeamView({ teamId, setTeamId, results, manualTies }) {
+  const { teams, byId, tl } = useContext(Data);
+  const st = computeStandings(results, { manualTies, teams });
+  const row = st.rows.find((r) => r.teamId === teamId);
+  const matches = SCHEDULE.filter((m) => m.home === teamId || m.away === teamId);
+  const team = byId[teamId];
+  return (
+    <div className="stack">
+      <label>
+        <span className="label muted">Team wählen</span>
+        <select className="text-input" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="mx-team-card">
+        <div>
+          <p className="mx-team-title">{team.name}</p>
+          <p className="muted">{team.players.join(' & ')}</p>
+        </div>
+        <div className="mx-team-rank">
+          <span className="label muted">Platz</span>
+          <span className="num">
+            {row.rank}
+            {row.tied ? '=' : ''}
+          </span>
+          <span className="small muted">
+            {row.pts} Pkt · {formatDiff(row.diff)}
+          </span>
+        </div>
+      </div>
+      <div className="table-scroll">
+        <table className="mx-results-table">
+          <thead>
+            <tr>
+              <th scope="col">Runde</th>
+              <th scope="col">Zeit</th>
+              <th scope="col">Court</th>
+              <th scope="col" className="c-team">
+                Gegner
+              </th>
+              <th scope="col">Ergebnis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map((m) => {
+              const opp = m.home === teamId ? m.away : m.home;
+              const r = results[m.id];
+              const done = isConfirmedGroup(r);
+              const own = done ? (m.home === teamId ? r.a : r.b) : null;
+              const other = done ? (m.home === teamId ? r.b : r.a) : null;
+              return (
+                <tr key={m.id}>
+                  <td className="num">{m.round}</td>
+                  <td className="num">{tl.rounds[m.round - 1].from}</td>
+                  <td>{m.court}</td>
+                  <td className="c-team">
+                    <span className="team-name">{byId[opp].name}</span>
+                    <span className="players">{byId[opp].players.join(' & ')}</span>
+                  </td>
+                  <td className={`num ${done ? (own > other ? 'mx-win' : own < other ? 'mx-loss' : '') : 'muted'}`}>{done ? `${own}:${other}` : 'offen'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
-function GroupMatchCard({ match, result, showPlayers, onChange }) {
+function GroupMatchCard({ match, result, settings, showPlayers, onChange }) {
   const readOnly = useContext(ReadOnly);
-  if (readOnly) return <ViewMatchCard court={match.court} home={match.home} away={match.away} result={result} showPlayers={showPlayers} />;
-  const status = matchStatus(result);
+  const { byId } = useContext(Data);
+  const status = groupMatchStatus(match, result, settings);
+  if (readOnly) return <ViewMatchCard court={match.court} home={match.home} away={match.away} result={isConfirmedGroup(result) ? result : null} status={status} showPlayers={showPlayers} />;
   const confirmed = isConfirmedGroup(result);
   const a = result?.a ?? null;
   const b = result?.b ?? null;
-  const v = validateGroupScore(a, b);
+  const v = validateGroupScore(a, b, false);
   const total = (a ?? 0) + (b ?? 0);
-  const set = (patch) => onChange({ a, b, confirmed: false, ...patch });
+  const set = (patch) => onChange({ a, b, confirmed: false, short: false, ...patch });
 
   return (
     <article className={`match status-${status}`}>
@@ -584,36 +908,41 @@ function GroupMatchCard({ match, result, showPlayers, onChange }) {
         <CourtBadge court={match.court} />
         <StatusChip status={status} />
       </header>
-
       <div className="match-body">
-        <TeamScore id={match.home} value={a} showPlayers={showPlayers} locked={confirmed} max={GROUP_MAX_GAMES - (b ?? 0)} onChange={(n) => set({ a: n })} winner={confirmed && a > b} />
-        <TeamScore id={match.away} value={b} showPlayers={showPlayers} locked={confirmed} max={GROUP_MAX_GAMES - (a ?? 0)} onChange={(n) => set({ b: n })} winner={confirmed && b > a} />
+        <TeamScore id={match.home} value={a} showPlayers={showPlayers} locked={confirmed} max={GROUP_GAMES - (b ?? 0)} onChange={(n) => set({ a: n })} winner={confirmed && a > b} />
+        <TeamScore id={match.away} value={b} showPlayers={showPlayers} locked={confirmed} max={GROUP_GAMES - (a ?? 0)} onChange={(n) => set({ b: n })} winner={confirmed && b > a} />
       </div>
-
       <footer className="match-foot">
         {confirmed ? (
           <>
             <span className="muted">
-              {a === b ? 'Unentschieden · je 1 Punkt' : `${TEAM_BY_ID[a > b ? match.home : match.away].name} +2 Punkte`}
+              {a === b ? 'Unentschieden · je 1 Punkt' : `${byId[a > b ? match.home : match.away].name} +2 Punkte`}
+              {result.short && ' · Abbruch (Zeit)'}
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={() => onChange({ a, b, confirmed: false })}>
+            <button className="btn btn-ghost btn-sm" onClick={() => onChange({ a, b, confirmed: false, short: false })}>
               Korrigieren
             </button>
           </>
         ) : (
           <>
-            <span className={`hint ${a != null && b != null && !v.ok ? 'is-error' : ''}`}>
-              {a == null && b == null ? `Games eintragen (max. ${GROUP_MAX_GAMES})` : v.ok ? `${total} von ${GROUP_MAX_GAMES} Games` : v.error}
+            <span className={`hint ${a != null && b != null && !v.ok && !v.needsShort ? 'is-error' : ''}`}>
+              {a == null && b == null ? `Games eintragen (${GROUP_GAMES} insgesamt)` : v.ok ? `${total} von ${GROUP_GAMES} Games` : v.error}
             </span>
             <div className="btn-row tight">
-              {status !== 'open' && (
+              {(a != null || b != null) && (
                 <button className="btn btn-ghost btn-sm" onClick={() => onChange(null)}>
                   Leeren
                 </button>
               )}
-              <button className="btn btn-primary btn-sm" disabled={!v.ok} onClick={() => onChange({ a, b, confirmed: true })}>
-                Bestätigen
-              </button>
+              {v.needsShort && a != null && b != null ? (
+                <button className="btn btn-warn btn-sm" onClick={() => onChange({ a, b, confirmed: true, short: true })}>
+                  Abbruch bestätigen
+                </button>
+              ) : (
+                <button className="btn btn-primary btn-sm" disabled={!v.ok} onClick={() => onChange({ a, b, confirmed: true, short: false })}>
+                  Bestätigen
+                </button>
+              )}
             </div>
           </>
         )}
@@ -623,7 +952,8 @@ function GroupMatchCard({ match, result, showPlayers, onChange }) {
 }
 
 function TeamScore({ id, value, showPlayers, locked, max, onChange, winner, extra }) {
-  const team = TEAM_BY_ID[id];
+  const { byId } = useContext(Data);
+  const team = byId[id];
   return (
     <div className={`team-score ${winner ? 'is-winner' : ''}`}>
       <div className="team-score-name">
@@ -638,6 +968,7 @@ function TeamScore({ id, value, showPlayers, locked, max, onChange, winner, extr
 
 function Stepper({ value, max, onChange, label }) {
   const v = value ?? null;
+  const limited = Number.isFinite(max);
   return (
     <div className="stepper">
       <button className="step" onClick={() => onChange(v == null || v <= 0 ? 0 : v - 1)} disabled={v == null || v <= 0} aria-label={`${label}: ein Game weniger`}>
@@ -657,7 +988,7 @@ function Stepper({ value, max, onChange, label }) {
           onChange(raw === '' ? null : Number(raw));
         }}
       />
-      <button className="step" onClick={() => onChange(v == null ? 1 : v + 1)} disabled={v != null && v >= max} aria-label={`${label}: ein Game mehr`}>
+      <button className="step" onClick={() => onChange(v == null ? 1 : v + 1)} disabled={limited && v != null && v >= max} aria-label={`${label}: ein Game mehr`}>
         +
       </button>
     </div>
@@ -666,85 +997,39 @@ function Stepper({ value, max, onChange, label }) {
 
 /* ---------------- Tabelle ---------------- */
 
-function Standings({ results, manualTies, setManualTie, showPlayers, round }) {
+function Standings({ results, manualTies, setManualTie, showPlayers }) {
   const readOnly = useContext(ReadOnly);
+  const { teams, byId } = useContext(Data);
   const lastWithResults = useMemo(() => {
     let r = 1;
     for (const m of SCHEDULE) if (isConfirmedGroup(results[m.id])) r = Math.max(r, m.round);
     return r;
   }, [results]);
-  const [sel, setSel] = useState(lastWithResults);
-  const st = computeStandings(results, { upToRound: sel, manualTies });
-  const roundDone = SCHEDULE.filter((m) => m.round <= sel).every((m) => isConfirmedGroup(results[m.id]));
+  const [sel, setSel] = useState(null);
+  const shown = sel ?? lastWithResults;
+  const st = computeStandings(results, { upToRound: shown, manualTies, teams });
+  const roundDone = SCHEDULE.filter((m) => m.round <= shown).every((m) => isConfirmedGroup(results[m.id]));
 
   return (
     <div className="stack-lg">
       <div className="page-head">
-        <h2 className="page-title">Tabelle</h2>
+        <h2 className="page-title">Live-Tabelle</h2>
         <p className="muted">Sieg 2 · Unentschieden 1 · Niederlage 0 Punkte</p>
       </div>
-      <p className="label muted">Tabellenstand nach Runde</p>
-      <div className="seg seg-tight" role="tablist" aria-label="Tabellenstand nach Runde">
+      <div className="seg" role="tablist" aria-label="Tabellenstand nach Runde">
         {ROUND_LIST.map((r) => (
-          <button key={r} role="tab" aria-selected={sel === r} className={`seg-btn ${sel === r ? 'is-active' : ''}`} onClick={() => setSel(r)}>
+          <button key={r} role="tab" aria-selected={shown === r} className={`seg-btn ${shown === r ? 'is-active' : ''}`} onClick={() => setSel(r)}>
             R{r}
           </button>
         ))}
       </div>
       <p className="muted small">
-        Stand nach Runde {sel}: {st.confirmedCount} von {sel * MATCHES_PER_ROUND} Matches bestätigt
+        Stand nach Runde {shown}: {st.confirmedCount} von {shown * MATCHES_PER_ROUND} Matches abgeschlossen
         {!roundDone && ' · noch nicht vollständig'}
-        {round !== 'finals' && sel === lastWithResults && ' · live'}
+        {sel == null && ' · live'}
       </p>
-
-      <div className="table-scroll">
-        <table className="standings">
-          <thead>
-            <tr>
-              <th className="c-rank" scope="col">Pl.</th>
-              <th className="c-team" scope="col">Team</th>
-              <th scope="col" title="Spiele">Sp</th>
-              <th scope="col" title="Siege">S</th>
-              <th scope="col" title="Unentschieden">U</th>
-              <th scope="col" title="Niederlagen">N</th>
-              <th scope="col" title="Gewonnene Games">G+</th>
-              <th scope="col" title="Verlorene Games">G−</th>
-              <th scope="col" title="Game-Differenz">Diff</th>
-              <th scope="col" className="c-pts" title="Tabellenpunkte">Pkt</th>
-            </tr>
-          </thead>
-          <tbody>
-            {st.rows.map((r) => (
-              <tr key={r.teamId} className={`${r.position <= 2 ? 'is-top' : ''} ${r.tied ? 'is-tied' : ''}`}>
-                <td className="c-rank num">
-                  <span className={`rank-pill rank-${r.position}`}>
-                    {r.rank}
-                    {r.tied ? '=' : ''}
-                  </span>
-                </td>
-                <td className="c-team">
-                  <span className="team-name">{r.team.name}</span>
-                  {showPlayers && <span className="players">{r.team.players.join(' & ')}</span>}
-                  {r.decidedBy === 'h2h' && <span className="tag">dir. Vergleich</span>}
-                  {r.decidedBy === 'manual' && <span className="tag">manuell</span>}
-                  {r.tied && <span className="tag tag-warn">Gleichstand</span>}
-                </td>
-                <td className="num">{r.played}</td>
-                <td className="num">{r.won}</td>
-                <td className="num">{r.drawn}</td>
-                <td className="num">{r.lost}</td>
-                <td className="num">{r.gf}</td>
-                <td className="num">{r.ga}</td>
-                <td className={`num diff ${r.diff > 0 ? 'pos' : r.diff < 0 ? 'neg' : ''}`}>{formatDiff(r.diff)}</td>
-                <td className="num c-pts">{r.pts}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="legend muted small">
-        <span className="legend-swatch" /> Platz 1 und 2 spielen das Finale, 3 gegen 4, 5 gegen 6, 7 gegen 8 – falls die Zeit reicht, sonst zählt diese Tabelle. Reihenfolge: Punkte → Game-Differenz → gewonnene Games → direkter Vergleich.
-      </p>
+      <StandingsTable rows={st.rows} showPlayers={showPlayers} />
+      <p className="legend muted small">Reihenfolge: Punkte → Game-Differenz → gewonnene Games → direkter Vergleich → Entscheidung der Turnierleitung.</p>
 
       {st.notes.length > 0 && (
         <section className="stack">
@@ -758,33 +1043,97 @@ function Standings({ results, manualTies, setManualTie, showPlayers, round }) {
           </ul>
         </section>
       )}
-
-      {readOnly && st.unresolved.length > 0 && (
-        <p className="alert">Gleichstand nach allen Kriterien – die Turnierleitung entscheidet die Reihenfolge.</p>
-      )}
-
-      {!readOnly && st.unresolved.map((g) => (
-        <TieDecision key={g.key} group={g} rows={st.rows} onSave={(ids) => setManualTie(g.key, ids)} />
-      ))}
-
-      {!readOnly && [...new Set(st.rows.filter((r) => r.decidedBy === 'manual').map((r) => r.tieKey))].map((key) => (
-        <div key={key} className="alert">
-          Manuelle Reihenfolge festgelegt für{' '}
-          {st.rows
-            .filter((r) => r.tieKey === key)
-            .map((r) => r.team.name)
-            .join(', ')}
-          .{' '}
-          <button className="link" onClick={() => setManualTie(key, null)}>
-            Aufheben
-          </button>
-        </div>
-      ))}
+      {readOnly && st.unresolved.length > 0 && <p className="alert">Gleichstand nach allen Kriterien – die Turnierleitung legt die Reihenfolge fest.</p>}
+      {!readOnly && st.unresolved.map((g) => <TieDecision key={g.key} group={g} rows={st.rows} byId={byId} onSave={(ids) => setManualTie(g.key, ids)} />)}
+      {!readOnly &&
+        [...new Set(st.rows.filter((r) => r.decidedBy === 'manual').map((r) => r.tieKey))].map((key) => (
+          <div key={key} className="alert">
+            Manuelle Reihenfolge festgelegt für{' '}
+            {st.rows
+              .filter((r) => r.tieKey === key)
+              .map((r) => r.team.name)
+              .join(', ')}
+            .{' '}
+            <button className="link" onClick={() => setManualTie(key, null)}>
+              Aufheben
+            </button>
+          </div>
+        ))}
     </div>
   );
 }
 
-function TieDecision({ group, rows, onSave }) {
+function StandingsTable({ rows, showPlayers, compact = false }) {
+  return (
+    <div className="table-scroll">
+      <table className={`standings mx-standings ${compact ? 'is-compact' : ''}`}>
+        <thead>
+          <tr>
+            <th className="c-rank" scope="col">
+              Pl.
+            </th>
+            <th className="c-team" scope="col">
+              Team
+            </th>
+            <th scope="col" title="Absolvierte Matches">
+              Sp
+            </th>
+            <th scope="col" title="Siege">
+              S
+            </th>
+            <th scope="col" title="Unentschieden">
+              U
+            </th>
+            <th scope="col" title="Niederlagen">
+              N
+            </th>
+            <th scope="col" title="Gewonnene Games">
+              G+
+            </th>
+            <th scope="col" title="Verlorene Games">
+              G−
+            </th>
+            <th scope="col" title="Game-Differenz">
+              Diff
+            </th>
+            <th scope="col" className="c-pts" title="Tabellenpunkte">
+              Pkt
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.teamId} className={`mx-pos-${r.position} ${r.tied ? 'is-tied' : ''}`}>
+              <td className="c-rank num">
+                <span className={`rank-pill mx-rank-${r.position}`}>
+                  {r.rank}
+                  {r.tied ? '=' : ''}
+                </span>
+              </td>
+              <td className="c-team">
+                <span className="team-name">{r.team.name}</span>
+                {showPlayers && <span className="players">{r.team.players.join(' & ')}</span>}
+                {r.decidedBy === 'h2h' && <span className="tag">dir. Vergleich</span>}
+                {r.decidedBy === 'manual' && <span className="tag">Turnierleitung</span>}
+                {r.tied && <span className="tag tag-warn">Gleichstand</span>}
+              </td>
+              <td className="num">{r.played}</td>
+              <td className="num">{r.won}</td>
+              <td className="num">{r.drawn}</td>
+              <td className="num">{r.lost}</td>
+              <td className="num">{r.gf}</td>
+              <td className="num">{r.ga}</td>
+              <td className={`num diff ${r.diff > 0 ? 'pos' : r.diff < 0 ? 'neg' : ''}`}>{formatDiff(r.diff)}</td>
+              <td className="num c-pts">{r.pts}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TieDecision({ group, rows, byId, onSave }) {
   const [order, setOrder] = useState(group.ids);
   const firstPos = rows.find((r) => group.ids.includes(r.teamId)).position;
   const move = (i, d) => {
@@ -794,20 +1143,18 @@ function TieDecision({ group, rows, onSave }) {
   };
   return (
     <section className="tie-box">
-      <h3 className="tie-title">Gleichstand – Entscheidung durch den Organisator</h3>
-      <p className="small">
-        Nach allen Kriterien gleichauf. Reihenfolge festlegen (z. B. nach Losentscheid oder Golden-Point-Duell):
-      </p>
+      <h3 className="tie-title">Gleichstand – Entscheidung der Turnierleitung</h3>
+      <p className="small">Nach allen Kriterien gleichauf. Reihenfolge festlegen (z. B. Losentscheid oder Golden-Point-Duell):</p>
       <ol className="tie-list">
         {order.map((id, i) => (
           <li key={id}>
             <span className="num tie-pos">{firstPos + i}.</span>
-            <span className="team-name">{TEAM_BY_ID[id].name}</span>
+            <span className="team-name">{byId[id].name}</span>
             <span className="tie-btns">
-              <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`${TEAM_BY_ID[id].name} nach oben`}>
+              <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`${byId[id].name} nach oben`}>
                 ↑
               </button>
-              <button className="icon-btn" disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label={`${TEAM_BY_ID[id].name} nach unten`}>
+              <button className="icon-btn" disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label={`${byId[id].name} nach unten`}>
                 ↓
               </button>
             </span>
@@ -821,45 +1168,40 @@ function TieDecision({ group, rows, onSave }) {
   );
 }
 
-/* ---------------- Finalrunde ---------------- */
+/* ---------------- Platzierungsspiele ---------------- */
 
-function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) {
+function Finals({ results, finals, manualTies, settings, setFinal, setSetting, showPlayers, setTab, timer, setTimer, now }) {
   const readOnly = useContext(ReadOnly);
-  const ranking = finalRanking(results, finals, manualTies);
+  const { teams, byId, tl } = useContext(Data);
+  const ranking = finalRanking(results, finals, manualTies, settings, { teams });
   const fp = ranking.pairings;
   const progress = groupProgress(results);
-  const maxFinal = finalMaxGames(finals);
-  const skipped = finalsSkipped(finals);
-  const anyFinalEntered = FINALS.some((f) => finals[f.id] && (finals[f.id].a != null || finals[f.id].b != null));
-  const setFormat = (patch) => setFinal(FORMAT_KEY, { games: maxFinal, skip: skipped, ...patch, confirmed: true });
+  const skipped = ranking.skipped;
 
   return (
     <div className="stack-lg">
       <div className="page-head">
         <h2 className="page-title">Platzierungsspiele</h2>
         <p className="muted">
-          {skipped
-            ? 'Entfallen – es zählt die Abschlusstabelle der Vorrunde'
-            : `Best of ${maxFinal} Games (wer zuerst ${Math.ceil(maxFinal / 2)} Games hat) · Golden Point bei 40:40 · kein Unentschieden`}
+          Optional, ab ca. {tl.finals.from} Uhr · Spielmodus nach Restzeit (Satz, feste Anzahl Games oder auf Zeit) · keine Game-Begrenzung · Sieger bestätigt die Turnierleitung
         </p>
       </div>
 
       {!readOnly && (
         <section className="stack">
-          <SectionHead title="Modus" note="je nach verbleibender Zeit" />
-          <div className="seg" role="tablist" aria-label="Modus der Platzierungsspiele">
-            {FINAL_FORMATS.map((g) => (
-              <button key={g} role="tab" aria-selected={!skipped && maxFinal === g} className={`seg-btn ${!skipped && maxFinal === g ? 'is-active' : ''}`} onClick={() => setFormat({ games: g, skip: false })}>
-                Best of {g}
-              </button>
-            ))}
-            <button role="tab" aria-selected={skipped} className={`seg-btn ${skipped ? 'is-active' : ''}`} onClick={() => setFormat({ skip: true })}>
-              Keine Zeit
+          <SectionHead title="Finden Platzierungsspiele statt?" />
+          <div className="seg" role="tablist" aria-label="Platzierungsspiele">
+            <button role="tab" aria-selected={!skipped} className={`seg-btn ${!skipped ? 'is-active' : ''}`} onClick={() => setSetting('finalsMode', { mode: 'play' })}>
+              Ja, spielen
+            </button>
+            <button role="tab" aria-selected={skipped} className={`seg-btn ${skipped ? 'is-active' : ''}`} onClick={() => setSetting('finalsMode', { mode: 'skip' })}>
+              Überspringen
             </button>
           </div>
-          {anyFinalEntered && !skipped && <p className="muted small">Ergebnisse, die zum gewählten Modus nicht passen, werden bis zur Korrektur nicht gewertet.</p>}
+          {skipped && <p className="muted small">Ohne Platzierungsspiele zählt die Abschlusstabelle der Vorrunde als Endergebnis.</p>}
         </section>
       )}
+      {readOnly && skipped && <p className="alert">Die Platzierungsspiele entfallen – es zählt die Abschlusstabelle der Vorrunde.</p>}
 
       {!fp.unlocked && (
         <section className="locked">
@@ -888,7 +1230,10 @@ function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) 
               <CourtBadge court={f.court} />
               <span>
                 <strong>{f.label}</strong>
-                <span className="muted"> · Platz {f.places[0]} gegen Platz {f.places[1]}</span>
+                <span className="muted">
+                  {' '}
+                  · Platz {f.places[0]} gegen Platz {f.places[1]}
+                </span>
               </span>
             </li>
           ))}
@@ -898,32 +1243,26 @@ function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) 
       {fp.unlocked && !skipped && (
         <div className="match-list mx-match-list">
           {FINALS.map((f) => (
-            <FinalMatchCard key={f.id} final={f} pairing={fp.pairings[f.id]} stored={finals[f.id]} maxGames={maxFinal} showPlayers={showPlayers} onChange={(v) => setFinal(f.id, v)} />
+            <FinalMatchCard key={f.id} final={f} pairing={fp.pairings[f.id]} stored={finals[f.id]} showPlayers={showPlayers} onChange={(v) => setFinal(f.id, v)} />
           ))}
         </div>
       )}
 
       {fp.unlocked && (
         <section className="stack">
-          <SectionHead
-            title="Endgültige Platzierungen"
-            note={skipped ? (ranking.complete ? 'Nach Abschlusstabelle' : 'Gleichstand in der Tabelle klären') : ranking.complete ? 'Alle Spiele bestätigt' : 'Wird mit jedem bestätigten Spiel ergänzt'}
-          />
+          <SectionHead title="Endgültige Platzierungen" note={ranking.complete ? 'Stehen fest' : 'Wird mit jedem abgeschlossenen Spiel ergänzt'} />
           <ol className="final-list">
             {ranking.places.map((p) => (
               <li key={p.place} className={`place-${p.place}`}>
                 <span className="num final-place">{p.place}.</span>
-                {p.decided ? (
-                  <span className="team-name">{TEAM_BY_ID[p.teamId].name}</span>
-                ) : (
-                  <span className="muted">{p.candidates.map((id) => TEAM_BY_ID[id].name).join(' / ')}</span>
-                )}
+                {p.decided ? <span className="team-name">{byId[p.teamId].name}</span> : <span className="muted">{p.candidates.map((id) => byId[id].name).join(' / ')}</span>}
+                {p.decided && p.by === 'table' && !skipped && <span className="tag">nach Tabelle</span>}
               </li>
             ))}
           </ol>
           {ranking.complete && (
-            <button className="btn btn-ball btn-block" onClick={() => setTab('ehrung')}>
-              Zur Siegerehrung
+            <button className="btn btn-ball btn-block" onClick={() => setTab('ergebnis')}>
+              Zum Turnierergebnis
             </button>
           )}
         </section>
@@ -932,21 +1271,24 @@ function Finals({ results, finals, manualTies, setFinal, showPlayers, setTab }) 
   );
 }
 
-function FinalMatchCard({ final, pairing, stored, maxGames, showPlayers, onChange }) {
+function FinalMatchCard({ final, pairing, stored, showPlayers, onChange }) {
   const readOnly = useContext(ReadOnly);
-  const st = finalMatchState(pairing, stored, maxGames);
+  const { byId } = useContext(Data);
+  const st = finalMatchState(pairing, stored);
   const { teamA, teamB } = pairing;
+
   if (readOnly) {
-    const done = st.status === 'confirmed';
+    const done = st.status === 'done';
     return (
       <ViewMatchCard
         court={final.court}
         label={final.label}
         home={teamA}
         away={teamB}
-        result={done ? { a: st.a, b: st.b, confirmed: true } : null}
+        result={done ? { a: st.a, b: st.b } : null}
         winner={done ? st.winner : null}
-        golden={done && st.a === st.b ? st.golden : null}
+        manualWinner={done && st.a === st.b ? st.winner : null}
+        status={st.status === 'stale' ? 'open' : st.status}
         showPlayers={showPlayers}
       />
     );
@@ -962,9 +1304,9 @@ function FinalMatchCard({ final, pairing, stored, maxGames, showPlayers, onChang
         <div className="alert alert-warn">
           Die Paarung hat sich durch eine Korrektur in der Vorrunde geändert. Das gespeicherte Ergebnis{' '}
           <strong>
-            {TEAM_BY_ID[st.stored.teamA].name} {st.stored.a}:{st.stored.b} {TEAM_BY_ID[st.stored.teamB].name}
+            {byId[st.stored.teamA].name} {st.stored.a ?? '–'}:{st.stored.b ?? '–'} {byId[st.stored.teamB].name}
           </strong>{' '}
-          gehört nicht zu {TEAM_BY_ID[teamA].name} gegen {TEAM_BY_ID[teamB].name} und wird nicht gewertet.
+          gehört nicht zu {byId[teamA].name} gegen {byId[teamB].name} und wird nicht gewertet.
         </div>
         <footer className="match-foot">
           <span className="muted small">Wird die Korrektur zurückgenommen, gilt es wieder.</span>
@@ -978,34 +1320,34 @@ function FinalMatchCard({ final, pairing, stored, maxGames, showPlayers, onChang
 
   const a = st.a ?? null;
   const b = st.b ?? null;
-  const confirmed = st.status === 'confirmed';
-  const status = st.status === 'empty' ? 'open' : confirmed ? 'done' : 'entered';
+  const done = st.status === 'done';
   const v = st.validation;
-  const set = (patch) => onChange({ teamA, teamB, a, b, golden: st.golden ?? null, confirmed: false, ...patch });
+  const base = { teamA, teamB, a, b, winner: st.manualWinner ?? null, started: true, confirmed: false };
+  const set = (patch) => onChange({ ...base, ...patch });
   const isDraw = a != null && b != null && a === b;
 
   return (
-    <article className={`match match-final final-${final.id} status-${status}`}>
+    <article className={`match match-final final-${final.id} status-${st.status}`}>
       <header className="match-head">
         <CourtBadge court={final.court} />
         <span className="final-label">{final.label}</span>
-        <StatusChip status={status} />
+        <StatusChip status={st.status} />
       </header>
       <p className="final-sub muted small">
         Platz {final.places[0]} gegen Platz {final.places[1]} der Vorrunde
       </p>
       <div className="match-body">
-        <TeamScore id={teamA} value={a} showPlayers={showPlayers} locked={confirmed} max={Math.min(Math.ceil(maxGames / 2), maxGames - (b ?? 0))} onChange={(n) => set({ a: n, golden: null })} winner={confirmed && st.winner === teamA} extra={confirmed && isDraw && st.golden === teamA ? <span className="tag">Golden Point</span> : null} />
-        <TeamScore id={teamB} value={b} showPlayers={showPlayers} locked={confirmed} max={Math.min(Math.ceil(maxGames / 2), maxGames - (a ?? 0))} onChange={(n) => set({ b: n, golden: null })} winner={confirmed && st.winner === teamB} extra={confirmed && isDraw && st.golden === teamB ? <span className="tag">Golden Point</span> : null} />
+        <TeamScore id={teamA} value={a} showPlayers={showPlayers} locked={done} max={Infinity} onChange={(n) => set({ a: n, winner: null })} winner={done && st.winner === teamA} extra={done && isDraw && st.winner === teamA ? <span className="tag">Sieger festgelegt</span> : null} />
+        <TeamScore id={teamB} value={b} showPlayers={showPlayers} locked={done} max={Infinity} onChange={(n) => set({ b: n, winner: null })} winner={done && st.winner === teamB} extra={done && isDraw && st.winner === teamB ? <span className="tag">Sieger festgelegt</span> : null} />
       </div>
 
-      {!confirmed && isDraw && (
+      {!done && isDraw && (
         <div className="golden">
-          <p className="golden-title">Gleichstand nach Zeitablauf – entscheidender Golden Point</p>
+          <p className="golden-title">Gleichstand – Sieger festlegen</p>
           <div className="golden-btns">
             {[teamA, teamB].map((id) => (
-              <button key={id} className={`btn btn-sm ${st.golden === id ? 'btn-ball' : 'btn-ghost'}`} aria-pressed={st.golden === id} onClick={() => set({ golden: id })}>
-                {TEAM_BY_ID[id].name}
+              <button key={id} className={`btn btn-sm ${st.manualWinner === id ? 'btn-ball' : 'btn-ghost'}`} aria-pressed={st.manualWinner === id} onClick={() => set({ winner: id })}>
+                {byId[id].name}
               </button>
             ))}
           </div>
@@ -1013,26 +1355,29 @@ function FinalMatchCard({ final, pairing, stored, maxGames, showPlayers, onChang
       )}
 
       <footer className="match-foot">
-        {confirmed ? (
+        {done ? (
           <>
-            <span className="muted">Sieger: {TEAM_BY_ID[st.winner].name}</span>
+            <span className="muted">Sieger: {byId[st.winner].name}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => onChange({ ...stored, confirmed: false })}>
               Korrigieren
             </button>
           </>
+        ) : st.status === 'open' ? (
+          <>
+            <span className="hint">Noch nicht gestartet</span>
+            <button className="btn btn-primary btn-sm" onClick={() => onChange({ teamA, teamB, a: null, b: null, winner: null, started: true, confirmed: false })}>
+              Spiel starten
+            </button>
+          </>
         ) : (
           <>
-            <span className={`hint ${a != null && b != null && !v?.ok && !v?.needsGolden ? 'is-error' : ''}`}>
-              {a == null && b == null ? `Best of ${maxGames} – Games eintragen` : v?.ok ? `${a + b} von max. ${maxGames} Games` : v?.error}
-            </span>
+            <span className={`hint ${a != null && b != null && !v?.ok && !v?.needsWinner ? 'is-error' : ''}`}>{a == null && b == null ? 'Läuft – Spielstand eintragen' : v?.ok ? `${a}:${b}` : v?.error}</span>
             <div className="btn-row tight">
-              {status !== 'open' && (
-                <button className="btn btn-ghost btn-sm" onClick={() => onChange(null)}>
-                  Leeren
-                </button>
-              )}
-              <button className="btn btn-primary btn-sm" disabled={!v?.ok} onClick={() => set({ confirmed: true, golden: isDraw ? st.golden : null })}>
-                Bestätigen
+              <button className="btn btn-ghost btn-sm" onClick={() => onChange(null)}>
+                Zurücksetzen
+              </button>
+              <button className="btn btn-primary btn-sm" disabled={!v?.ok} onClick={() => set({ confirmed: true, winner: isDraw ? st.manualWinner : null })}>
+                Beenden & bestätigen
               </button>
             </div>
           </>
@@ -1042,70 +1387,128 @@ function FinalMatchCard({ final, pairing, stored, maxGames, showPlayers, onChang
   );
 }
 
-/* ---------------- Siegerehrung ---------------- */
+/* ---------------- Turnierergebnis ---------------- */
 
-function Awards({ results, finals, manualTies, showPlayers, setTab, onExport }) {
-  const ranking = finalRanking(results, finals, manualTies);
-  if (!ranking.complete) {
-    return (
-      <div className="stack-lg">
-        <div className="page-head">
-          <h2 className="page-title">Siegerehrung</h2>
-        </div>
+function Result({ results, finals, manualTies, settings, showPlayers, setTab, print }) {
+  const { teams, byId, tl } = useContext(Data);
+  const ranking = finalRanking(results, finals, manualTies, settings, { teams });
+  const st = computeStandings(results, { manualTies, teams });
+
+  return (
+    <div className="stack-lg awards">
+      <div className="page-head center">
+        <p className="eyebrow">
+          {TOURNAMENT.dateLabel} · {TOURNAMENT.venue}
+        </p>
+        <h2 className="page-title">Turnierergebnis</h2>
+      </div>
+
+      {!ranking.complete ? (
         <section className="locked">
           <Icon name="medal" />
           <div>
             <p className="locked-title">Noch nicht entschieden</p>
-            <p>
-              Die Siegerehrung erscheint, sobald alle {FINALS.length} Platzierungsspiele bestätigt sind – oder unter „Finale“ „Keine Zeit“ gewählt wurde
-              (dann zählt die Abschlusstabelle).
-            </p>
+            <p>Das Ergebnis steht fest, sobald alle Platzierungsspiele abgeschlossen sind – oder die Turnierleitung sie überspringt bzw. das Turnier abschließt (dann zählt für offene Paare die Tabelle).</p>
             <button className="btn btn-primary" onClick={() => setTab('finale')}>
               Zu den Platzierungsspielen
             </button>
           </div>
         </section>
-      </div>
-    );
-  }
-  const team = (place) => TEAM_BY_ID[ranking.places[place - 1].teamId];
-  const podium = [2, 1, 3];
-  return (
-    <div className="stack-lg awards">
-      <div className="page-head center">
-        <p className="eyebrow">{TOURNAMENT.dateLabel}</p>
-        <h2 className="page-title">Siegerehrung</h2>
-      </div>
-      <div className="podium">
-        {podium.map((p) => (
-          <div key={p} className={`podium-col podium-${p}`}>
-            <div className="podium-team">
-              <Medal place={p} />
-              <span className="podium-name">{team(p).name}</span>
-              <span className="players">{team(p).players.join(' & ')}</span>
-            </div>
-            <div className="podium-block">
-              <span className="num">{p}</span>
-            </div>
+      ) : (
+        <>
+          <div className="mx-winner">
+            <p className="label">Turniersieger</p>
+            <p className="mx-winner-name">{byId[ranking.places[0].teamId].name}</p>
+            <p className="muted">{byId[ranking.places[0].teamId].players.join(' & ')}</p>
           </div>
-        ))}
-      </div>
-      <ol className="final-list rest">
-        {TEAMS.slice(3).map((_, i) => i + 4).map((p) => (
-          <li key={p}>
-            <span className="num final-place">{p}.</span>
-            <span className="team-name">{team(p).name}</span>
-            {showPlayers && <span className="players">{team(p).players.join(' & ')}</span>}
-          </li>
-        ))}
-      </ol>
-      <p className="muted small center">Herzlichen Glückwunsch an alle acht Teams – danke fürs Mitspielen!</p>
-      {ranking.skipped && <p className="muted small center">Platzierung nach der Abschlusstabelle der Vorrunde.</p>}
-      {!onExport ? null : (
-        <button className="btn btn-ghost btn-block" onClick={onExport}>
-          <Icon name="share" /> Ergebnisse exportieren
-        </button>
+          <div className="podium">
+            {[2, 1, 3].map((p) => {
+              const t = byId[ranking.places[p - 1].teamId];
+              return (
+                <div key={p} className={`podium-col podium-${p}`}>
+                  <div className="podium-team">
+                    <Medal place={p} />
+                    <span className="podium-name">{t.name}</span>
+                    <span className="players">{t.players.join(' & ')}</span>
+                  </div>
+                  <div className="podium-block">
+                    <span className="num">{p}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <ol className="final-list rest">
+            {ranking.places.slice(3).map((p) => (
+              <li key={p.place}>
+                <span className="num final-place">{p.place}.</span>
+                <span className="team-name">{byId[p.teamId].name}</span>
+                {showPlayers && <span className="players">{byId[p.teamId].players.join(' & ')}</span>}
+              </li>
+            ))}
+          </ol>
+          {ranking.skipped && <p className="muted small center">Ohne Platzierungsspiele – Endstand nach der Abschlusstabelle der Vorrunde.</p>}
+        </>
       )}
+
+      <section className="stack">
+        <SectionHead title="Abschlusstabelle Vorrunde" />
+        <StandingsTable rows={st.rows} showPlayers={false} />
+      </section>
+
+      <section className="stack">
+        <SectionHead title="Alle Ergebnisse" />
+        <div className="table-scroll">
+          <table className="mx-results-table">
+            <thead>
+              <tr>
+                <th scope="col">R</th>
+                <th scope="col">Court</th>
+                <th scope="col" className="c-team">
+                  Begegnung
+                </th>
+                <th scope="col">Erg.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SCHEDULE.map((m) => {
+                const r = results[m.id];
+                const done = isConfirmedGroup(r);
+                return (
+                  <tr key={m.id}>
+                    <td className="num">{m.round}</td>
+                    <td>{m.court}</td>
+                    <td className="c-team">
+                      {byId[m.home].name} – {byId[m.away].name}
+                    </td>
+                    <td className="num">{done ? `${r.a}:${r.b}` : '–'}</td>
+                  </tr>
+                );
+              })}
+              {ranking.pairings.unlocked &&
+                !ranking.skipped &&
+                FINALS.map((f) => {
+                  const p = ranking.pairings.pairings[f.id];
+                  const s = finalMatchState(p, finals[f.id]);
+                  return (
+                    <tr key={f.id} className="mx-final-row">
+                      <td>{f.places.join('/')}</td>
+                      <td>{f.court}</td>
+                      <td className="c-team">
+                        {f.label}: {byId[p.teamA].name} – {byId[p.teamB].name}
+                      </td>
+                      <td className="num">{s.status === 'done' ? `${s.a}:${s.b}` : '–'}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small">Platzierungsspiele ab {tl.finals.from} Uhr.</p>
+      </section>
+      <button className="btn btn-ghost" onClick={() => print({ kind: 'report' })}>
+        <Icon name="print" /> Ergebnis drucken
+      </button>
     </div>
   );
 }
@@ -1124,6 +1527,415 @@ function Medal({ place }) {
   );
 }
 
+/* ---------------- Administration ---------------- */
+
+function Admin({ state, settings, setSetting, sync, onExport, onReset, results, finals, manualTies }) {
+  const { teams, times, tl } = useContext(Data);
+  const closed = !!settings.closed?.at;
+  const download = (name, text) => {
+    try {
+      const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch {
+      /* Download nicht möglich */
+    }
+  };
+  const fr = finalRanking(results, finals, manualTies, settings, { teams });
+
+  return (
+    <div className="stack-lg">
+      <div className="page-head">
+        <h2 className="page-title">Turnierleitung</h2>
+        <p className="muted">Nur auf den Geräten der Turnierleitung. Teilnehmer sehen den Link ohne Bearbeitung.</p>
+      </div>
+
+      {!inFrame && <SyncPanel sync={sync} />}
+
+      <section className="stack">
+        <SectionHead title="Teams bearbeiten" note="Namen und Spieler" />
+        {teams.map((t) => (
+          <TeamEditor key={t.id} team={t} onSave={(v) => setSetting(`teams/${t.id}`, v)} onResetDefault={() => setSetting(`teams/${t.id}`, null)} isDefault={!settings[`teams/${t.id}`]} />
+        ))}
+      </section>
+
+      <TimesEditor times={times} tl={tl} onSave={(v) => setSetting('times', v)} onResetDefault={() => setSetting('times', null)} />
+
+      <section className="stack">
+        <SectionHead title="Turnier abschließen" note={closed ? 'abgeschlossen' : 'offen'} />
+        <p className="small muted">Schließt das Turnier ab: nicht gespielte Platzierungsspiele werden nach der Abschlusstabelle gewertet. Kann rückgängig gemacht werden.</p>
+        {closed ? (
+          <button className="btn btn-ghost" onClick={() => setSetting('closed', null)}>
+            Abschluss aufheben
+          </button>
+        ) : (
+          <button className="btn btn-primary" disabled={!fr.pairings.unlocked} onClick={() => setSetting('closed', { at: Date.now() })}>
+            Turnier jetzt abschließen
+          </button>
+        )}
+      </section>
+
+      <section className="stack">
+        <SectionHead title="Export" />
+        <div className="btn-row">
+          <button className="btn btn-ghost" onClick={() => download('tj-padel-masters-ergebnisse.csv', resultsCsv(state))}>
+            <Icon name="share" /> Ergebnisse (CSV)
+          </button>
+          <button className="btn btn-ghost" onClick={() => download('tj-padel-masters-tabelle.csv', standingsCsv(state))}>
+            <Icon name="share" /> Abschlusstabelle (CSV)
+          </button>
+          <button className="btn btn-ghost" onClick={onExport}>
+            <Icon name="share" /> Text / Backup
+          </button>
+        </div>
+      </section>
+
+      <section className="stack">
+        <SectionHead title="Zurücksetzen" />
+        <button className="btn btn-danger-ghost" onClick={onReset}>
+          <Icon name="reset" /> Turnier zurücksetzen
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function TeamEditor({ team, onSave, onResetDefault, isDefault }) {
+  const [name, setName] = useState(team.name);
+  const [p1, setP1] = useState(team.players[0]);
+  const [p2, setP2] = useState(team.players[1]);
+  useEffect(() => {
+    setName(team.name);
+    setP1(team.players[0]);
+    setP2(team.players[1]);
+  }, [team.name, team.players[0], team.players[1]]);
+  const dirty = name !== team.name || p1 !== team.players[0] || p2 !== team.players[1];
+  const nr = team.id.slice(1);
+  return (
+    <div className="mx-team-edit">
+      <span className="mx-team-nr num">{nr}</span>
+      <div className="mx-team-fields">
+        <input className="text-input" aria-label={`Teamname ${nr}`} value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="mx-two">
+          <input className="text-input" aria-label={`Spieler 1 Team ${nr}`} value={p1} onChange={(e) => setP1(e.target.value)} />
+          <input className="text-input" aria-label={`Spieler 2 Team ${nr}`} value={p2} onChange={(e) => setP2(e.target.value)} />
+        </div>
+        {(dirty || !isDefault) && (
+          <div className="btn-row tight">
+            {dirty && (
+              <button className="btn btn-primary btn-sm" disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), players: [p1.trim(), p2.trim()] })}>
+                Speichern
+              </button>
+            )}
+            {!isDefault && !dirty && (
+              <button className="btn btn-ghost btn-sm" onClick={onResetDefault}>
+                Ursprünglichen Namen wiederherstellen
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimesEditor({ times, tl, onSave, onResetDefault }) {
+  const [draft, setDraft] = useState(times);
+  useEffect(() => setDraft(times), [JSON.stringify(times)]);
+  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const setOv = (k, v) => setDraft((d) => ({ ...d, overrides: { ...(d.overrides || {}), [k]: v } }));
+  const preview = timeline(draft);
+  const valid = isClock(draft.start) && isClock(draft.end) && Number(draft.roundMinutes) > 0 && Object.values(draft.overrides || {}).every((v) => !v || isClock(v));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(times);
+  const clean = () => ({
+    ...draft,
+    roundMinutes: Number(draft.roundMinutes),
+    pauseMinutes: Number(draft.pauseMinutes),
+    evalMinutes: Number(draft.evalMinutes),
+    pauseAfterRound: Number(draft.pauseAfterRound),
+    overrides: Object.fromEntries(Object.entries(draft.overrides || {}).filter(([, v]) => v && isClock(v))),
+  });
+  return (
+    <section className="stack">
+      <SectionHead title="Uhrzeiten" note="Europe/Berlin" />
+      <div className="mx-times">
+        <label>
+          <span className="label muted">Start</span>
+          <input className="text-input" type="time" value={draft.start} onChange={(e) => set('start', e.target.value)} />
+        </label>
+        <label>
+          <span className="label muted">Rundendauer (min)</span>
+          <input className="text-input" type="number" min="5" max="60" value={draft.roundMinutes} onChange={(e) => set('roundMinutes', e.target.value)} />
+        </label>
+        <label>
+          <span className="label muted">Pause nach Runde</span>
+          <input className="text-input" type="number" min="0" max="7" value={draft.pauseAfterRound} onChange={(e) => set('pauseAfterRound', e.target.value)} />
+        </label>
+        <label>
+          <span className="label muted">Pause (min)</span>
+          <input className="text-input" type="number" min="0" max="60" value={draft.pauseMinutes} onChange={(e) => set('pauseMinutes', e.target.value)} />
+        </label>
+        <label>
+          <span className="label muted">Auswertung (min)</span>
+          <input className="text-input" type="number" min="0" max="30" value={draft.evalMinutes} onChange={(e) => set('evalMinutes', e.target.value)} />
+        </label>
+        <label>
+          <span className="label muted">Turnierende</span>
+          <input className="text-input" type="time" value={draft.end} onChange={(e) => set('end', e.target.value)} />
+        </label>
+      </div>
+      <details className="mx-details">
+        <summary>Einzelne Startzeiten verschieben</summary>
+        <div className="mx-times">
+          {ROUND_LIST.map((r) => (
+            <label key={r}>
+              <span className="label muted">
+                Runde {r} (berechnet {timeline({ ...draft, overrides: {} }).rounds[r - 1].from})
+              </span>
+              <input className="text-input" type="time" value={draft.overrides?.[r] || ''} onChange={(e) => setOv(r, e.target.value)} />
+            </label>
+          ))}
+          <label>
+            <span className="label muted">Platzierungsspiele</span>
+            <input className="text-input" type="time" value={draft.overrides?.finals || ''} onChange={(e) => setOv('finals', e.target.value)} />
+          </label>
+        </div>
+      </details>
+      <p className="small muted">
+        Vorschau: Runde 1 {preview.rounds[0].from} · {preview.pause ? `Pause ${preview.pause.from}–${preview.pause.to} · ` : ''}Runde 7 bis {preview.rounds[ROUNDS - 1].to} · Platzierungsspiele ab {preview.finals.from} · Ende {preview.end.from}
+      </p>
+      <div className="btn-row">
+        <button className="btn btn-primary" disabled={!dirty || !valid} onClick={() => onSave(clean())}>
+          Uhrzeiten speichern
+        </button>
+        <button className="btn btn-ghost" onClick={onResetDefault}>
+          Standard (11:00–14:00)
+        </button>
+      </div>
+      {!valid && <p className="small error-text">Bitte gültige Uhrzeiten (HH:MM) und Minuten eintragen.</p>}
+    </section>
+  );
+}
+
+function SyncPanel({ sync }) {
+  const { config, setConfig, status, syncNow } = sync;
+  const [token, setToken] = useState(config.token);
+  const [check, setCheck] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const url = viewerUrl();
+  const connect = async () => {
+    setBusy(true);
+    setCheck(null);
+    try {
+      await testConnection({ ...config, token });
+      setConfig({ ...config, token: token.trim() });
+      setCheck({ ok: true, text: 'Verbunden. Alle Geräte der Turnierleitung gleichen jetzt ab.' });
+    } catch (e) {
+      setCheck({ ok: false, text: e instanceof TypeError ? 'Keine Verbindung zu GitHub.' : e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="stack">
+      <SectionHead title="Live-Abgleich" note={config.token ? { ok: 'verbunden', syncing: 'gleicht ab …', offline: 'kein Netz', error: 'Fehler', off: 'aus' }[status.state] : 'nicht verbunden'} />
+      <p className="small">
+        Alle Geräte der Turnierleitung speichern in <code>{config.path}</code> (Repository {config.owner}/{config.repo}, Branch <code>{config.branch}</code>). Nur wer den Token hat, kann Ergebnisse ändern.
+      </p>
+      {config.token && status.error && <p className="alert">{status.error}</p>}
+      <label className="small" htmlFor="sync-token">
+        GitHub-Token (Fine-grained, nur Repository „{config.repo}“, Contents: Read and write)
+      </label>
+      <input id="sync-token" className="text-input" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder="github_pat_…" value={token} onChange={(e) => setToken(e.target.value)} />
+      {check && <p className={`small ${check.ok ? 'ok-text' : 'error-text'}`}>{check.text}</p>}
+      <div className="btn-row">
+        <button className="btn btn-primary" disabled={!token.trim() || busy} onClick={connect}>
+          {busy ? 'Prüfe …' : config.token ? 'Token speichern' : 'Verbinden'}
+        </button>
+        {config.token && (
+          <>
+            <button className="btn btn-ghost" onClick={() => syncNow()}>
+              Jetzt abgleichen
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setConfig({ token: '' });
+                setToken('');
+                setCheck(null);
+              }}
+            >
+              Trennen
+            </button>
+          </>
+        )}
+      </div>
+      <div className="viewer-link">
+        <p className="small">
+          <strong>Link für die Teilnehmer</strong> (nur ansehen):
+        </p>
+        <input id="viewer-url" className="text-input" readOnly value={url} onFocus={(e) => e.target.select()} />
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(url);
+              setCopied(true);
+            } catch {
+              document.getElementById('viewer-url')?.select();
+            }
+          }}
+        >
+          {copied ? 'Kopiert ✓' : 'Link kopieren'}
+        </button>
+        <p className="small muted">Für einen Fernseher: {url}&amp;tv</p>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- TV-/Vollbild-Ansicht ---------------- */
+
+function TvBoard({ results, finals, manualTies, settings, timer, now, sync, online, onExit }) {
+  const { teams, byId, tl } = useContext(Data);
+  const round = currentRound(results);
+  const st = computeStandings(results, { manualTies, teams });
+  const ranking = finalRanking(results, finals, manualTies, settings, { teams });
+  const day = dayInfo(now, tl);
+  const matches =
+    round !== 'finals'
+      ? SCHEDULE.filter((m) => m.round === round).map((m) => ({ court: m.court, home: m.home, away: m.away, r: isConfirmedGroup(results[m.id]) ? results[m.id] : null }))
+      : ranking.pairings.unlocked && !ranking.skipped
+        ? FINALS.map((f) => {
+            const p = ranking.pairings.pairings[f.id];
+            const s = finalMatchState(p, finals[f.id]);
+            return { court: f.court, home: p.teamA, away: p.teamB, label: f.label, r: s.status === 'done' ? { a: s.a, b: s.b } : null };
+          })
+        : [];
+  return (
+    <div className="mx-tv">
+      <header className="mx-tv-head">
+        <Logo big />
+        <div className="mx-tv-title">
+          <h1>{TOURNAMENT.name}</h1>
+          <p>
+            {TOURNAMENT.dateLabel} · {TOURNAMENT.venue} · {day.text}
+          </p>
+        </div>
+        <div className="mx-tv-clock">
+          <span className="label">{timer ? phaseLabel(timer) : round === 'finals' ? 'Platzierungsspiele' : `Runde ${round}`}</span>
+          <span className={`num ${timer && timerRemaining(timer, now) === 0 ? 'is-over' : ''}`}>{timer ? fmtMs(timerRemaining(timer, now)) : '--:--'}</span>
+        </div>
+        <SyncBadge status={sync.status} online={online} label="Live" onClick={sync.refresh} />
+        <button className="btn btn-ghost btn-sm mx-tv-exit" onClick={onExit}>
+          Schließen
+        </button>
+      </header>
+      <div className="mx-tv-grid">
+        <section>
+          <h2 className="mx-tv-h">{round === 'finals' ? 'Platzierungsspiele' : `Runde ${round} · ${tl.rounds[round - 1].from}–${tl.rounds[round - 1].to}`}</h2>
+          <div className="mx-tv-matches">
+            {matches.map((m) => (
+              <div key={m.court} className={`mx-tv-match ${m.r ? 'is-done' : ''}`}>
+                <span className="mx-tv-court">{m.court}</span>
+                {m.label && <span className="mx-tv-label">{m.label}</span>}
+                <span className="mx-tv-team">
+                  {byId[m.home].name}
+                  <b className="num">{m.r ? m.r.a : ''}</b>
+                </span>
+                <span className="mx-tv-team">
+                  {byId[m.away].name}
+                  <b className="num">{m.r ? m.r.b : ''}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <h2 className="mx-tv-h">Live-Tabelle</h2>
+          <StandingsTable rows={st.rows} showPlayers={false} compact />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Druck ---------------- */
+
+function PrintArea({ job, state }) {
+  const { byId, tl } = useContext(Data);
+  const results = state.results || {};
+  if (!job || job.kind === 'report') return <pre>{exportText(state)}</pre>;
+  const list = job.kind === 'court' ? SCHEDULE.filter((m) => m.court === job.court) : SCHEDULE;
+  const fin = job.kind === 'court' ? FINALS.filter((f) => f.court === job.court) : FINALS;
+  return (
+    <div className="mx-print-sheet">
+      <h1>
+        {TOURNAMENT.name} – {job.kind === 'court' ? `Court ${job.court}` : 'Spielplan'}
+      </h1>
+      <p>
+        {TOURNAMENT.dateLabel} · {TOURNAMENT.venue}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Runde</th>
+            <th>Zeit</th>
+            {job.kind !== 'court' && <th>Court</th>}
+            <th>Team A</th>
+            <th>Team B</th>
+            <th>Ergebnis</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((m) => {
+            const r = results[m.id];
+            return (
+              <tr key={m.id}>
+                <td>{m.round}</td>
+                <td>
+                  {tl.rounds[m.round - 1].from}–{tl.rounds[m.round - 1].to}
+                </td>
+                {job.kind !== 'court' && <td>{m.court}</td>}
+                <td>
+                  <strong>{byId[m.home].name}</strong>
+                  <br />
+                  {byId[m.home].players.join(' & ')}
+                </td>
+                <td>
+                  <strong>{byId[m.away].name}</strong>
+                  <br />
+                  {byId[m.away].players.join(' & ')}
+                </td>
+                <td className="mx-print-score">{isConfirmedGroup(r) ? `${r.a} : ${r.b}` : '___ : ___'}</td>
+              </tr>
+            );
+          })}
+          {fin.map((f) => (
+            <tr key={f.id}>
+              <td colSpan={job.kind !== 'court' ? 3 : 2}>
+                {f.label} · ab {tl.finals.from}
+                {job.kind !== 'court' ? ` · ${f.court}` : ''}
+              </td>
+              <td>Platz {f.places[0]}</td>
+              <td>Platz {f.places[1]}</td>
+              <td className="mx-print-score">___ : ___</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {tl.pause && <p>Gemeinsame Pause {tl.pause.from}–{tl.pause.to} Uhr · Pro Match 8 Games · Golden Point bei 40:40</p>}
+    </div>
+  );
+}
+
 /* ---------------- Export & Zurücksetzen ---------------- */
 
 function ExportSheet({ state, onClose, onRestore }) {
@@ -1132,18 +1944,15 @@ function ExportSheet({ state, onClose, onRestore }) {
   const [restoreText, setRestoreText] = useState('');
   const [restoreMsg, setRestoreMsg] = useState(null);
   const ref = useRef(null);
-  const text = mode === 'text' ? exportText(state) : JSON.stringify(state, null, 1);
-
+  const text = mode === 'text' ? exportText(state) : JSON.stringify(pickShared(state), null, 1);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {
       ref.current?.select();
-      setCopied(false);
     }
   };
-
   return (
     <Modal title="Ergebnisse exportieren" onClose={onClose}>
       <div className="seg">
@@ -1154,21 +1963,14 @@ function ExportSheet({ state, onClose, onRestore }) {
           Backup
         </button>
       </div>
-      <textarea id="export-text" ref={ref} className="export-text" readOnly value={text} rows={12} onFocus={(e) => e.target.select()} />
-      <div className="btn-row">
-        <button className="btn btn-primary" onClick={copy}>
-          {copied ? 'Kopiert ✓' : 'Kopieren'}
-        </button>
-        {!inFrame && (
-          <button className="btn btn-ghost" onClick={() => window.print()}>
-            Drucken
-          </button>
-        )}
-      </div>
+      <textarea ref={ref} className="export-text" readOnly value={text} rows={12} onFocus={(e) => e.target.select()} />
+      <button className="btn btn-primary" onClick={copy}>
+        {copied ? 'Kopiert ✓' : 'Kopieren'}
+      </button>
       {mode === 'json' && (
         <div className="stack">
           <label className="small" htmlFor="restore-text">
-            Backup auf diesem Gerät wiederherstellen (ersetzt alle aktuellen Ergebnisse):
+            Backup wiederherstellen (ersetzt alle aktuellen Daten):
           </label>
           <textarea id="restore-text" className="export-text" rows={4} value={restoreText} onChange={(e) => setRestoreText(e.target.value)} placeholder="Backup hier einfügen" />
           <button
@@ -1196,7 +1998,7 @@ function ResetDialog({ onCancel, onConfirm }) {
   const [step, setStep] = useState(1);
   return (
     <Modal title="Turnier zurücksetzen?" onClose={onCancel}>
-      <p>Alle Ergebnisse der Vorrunde und der Platzierungsspiele sowie manuelle Entscheidungen werden auf diesem Gerät gelöscht. Teams und Spielplan bleiben erhalten.</p>
+      <p>Alle Ergebnisse, Platzierungsspiele, Timer und manuellen Entscheidungen werden gelöscht – auf allen verbundenen Geräten. Teamnamen und Uhrzeiten bleiben erhalten.</p>
       {step === 2 && <p className="alert alert-danger">Wirklich alles löschen? Das kann nicht rückgängig gemacht werden.</p>}
       <div className="btn-row">
         <button className="btn btn-ghost" onClick={onCancel}>
@@ -1237,162 +2039,33 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-/* ---------------- Abgleich ---------------- */
+/* ---------------- Kleinteile ---------------- */
 
 // Grün = Internet und Abgleich in Ordnung, rot = keine Verbindung (oder Abgleich-Fehler).
-function SyncBadge({ status, online, onClick }) {
+function SyncBadge({ status, online, label, onClick }) {
   const down = !online || status.state === 'offline';
-  const label = down ? 'Kein Netz' : { off: 'Lokal', syncing: 'Sync …', ok: 'Sync', error: 'Sync-Fehler' }[status.state];
+  const text = down ? 'Kein Netz' : label || { off: 'Lokal', syncing: 'Sync …', ok: 'Sync', error: 'Sync-Fehler' }[status.state];
   const tone = down || status.state === 'error' ? 'down' : 'up';
   return (
-    <button className={`sync-badge sync-${status.state} mx-conn-${tone}`} onClick={onClick} aria-label={`Abgleich: ${label}`}>
+    <button className={`sync-badge sync-${status.state} mx-conn-${tone}`} onClick={onClick} aria-label={`Abgleich: ${text}`}>
       <span className="sync-dot" aria-hidden="true" />
-      {label}
+      {text}
     </button>
   );
 }
 
-/** Verfolgt, ob das Gerät laut Browser online ist (reagiert sofort auf Flugmodus/WLAN-Verlust). */
-function useOnline() {
-  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener('online', up);
-    window.addEventListener('offline', down);
-    return () => {
-      window.removeEventListener('online', up);
-      window.removeEventListener('offline', down);
-    };
-  }, []);
-  return online;
-}
-
-function SyncSheet({ sync, onClose }) {
-  const { config, setConfig, status, syncNow } = sync;
-  const [token, setToken] = useState(config.token);
-  const [check, setCheck] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const ago = status.at ? Math.max(0, Math.round((Date.now() - status.at) / 1000)) : null;
-
-  const connect = async () => {
-    setBusy(true);
-    setCheck(null);
-    try {
-      await testConnection({ ...config, token });
-      setConfig({ ...config, token: token.trim() });
-      setCheck({ ok: true, text: 'Verbunden. Ergebnisse werden jetzt abgeglichen.' });
-    } catch (e) {
-      setCheck({ ok: false, text: e instanceof TypeError ? 'Keine Verbindung zu GitHub.' : e.message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal title="Zweites Handy verbinden" onClose={onClose}>
-      <p className="small">
-        Beide Handys speichern die Ergebnisse zusätzlich in der Datei <code>{config.path}</code> im Repository{' '}
-        <strong>
-          {config.owner}/{config.repo}
-        </strong>{' '}
-        (Branch <code>{config.branch}</code>). Änderungen erscheinen nach wenigen Sekunden auf dem anderen Handy.
-      </p>
-      {config.token && (
-        <div className={`alert ${status.state === 'error' ? 'alert-danger' : ''}`}>
-          <strong>Status:</strong>{' '}
-          {status.state === 'ok' && `abgeglichen${ago != null ? ` vor ${ago} s` : ''}`}
-          {status.state === 'syncing' && 'gleiche ab …'}
-          {(status.state === 'offline' || status.state === 'error') && status.error}{' '}
-          <button className="link" onClick={() => syncNow()}>
-            Jetzt abgleichen
-          </button>
-        </div>
-      )}
-      <label className="small" htmlFor="sync-token">
-        GitHub-Token (Fine-grained, nur Repository „{config.repo}“, Contents: Read and write)
-      </label>
-      <input
-        id="sync-token"
-        className="text-input"
-        type="password"
-        autoComplete="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        placeholder="github_pat_…"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-      />
-      {check && <p className={`small ${check.ok ? 'ok-text' : 'error-text'}`}>{check.text}</p>}
-      <div className="btn-row">
-        <button className="btn btn-primary" disabled={!token.trim() || busy} onClick={connect}>
-          {busy ? 'Prüfe …' : config.token ? 'Token speichern' : 'Verbinden'}
-        </button>
-        {config.token && (
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              setConfig({ ...DEFAULT_SYNC, token: '' });
-              setToken('');
-              setCheck(null);
-            }}
-          >
-            Trennen
-          </button>
-        )}
-      </div>
-      <p className="muted small">Der Token bleibt nur auf diesem Handy gespeichert. Nach dem Turnier kannst du ihn auf GitHub löschen.</p>
-    </Modal>
-  );
-}
-
-function LiveBadge({ status, online, onClick }) {
-  const down = !online || status.state === 'offline';
-  return (
-    <button className={`sync-badge sync-${down ? 'offline' : status.state} mx-conn-${down ? 'down' : 'up'}`} onClick={onClick} aria-label="Stand aktualisieren">
-      <span className="sync-dot" aria-hidden="true" />
-      {down ? 'Kein Netz' : 'Live'}
-    </button>
-  );
-}
-
-function ViewerLink() {
-  const [copied, setCopied] = useState(false);
-  const url = viewerUrl();
-  return (
-    <div className="viewer-link">
-      <p className="small">
-        <strong>Link für die Teilnehmer</strong> (nur ansehen, ohne Token):
-      </p>
-      <input id="viewer-url" className="text-input" readOnly value={url} onFocus={(e) => e.target.select()} />
-      <button
-        className="btn btn-ghost"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(url);
-            setCopied(true);
-          } catch {
-            document.getElementById('viewer-url')?.select();
-          }
-        }}
-      >
-        {copied ? 'Kopiert ✓' : 'Link kopieren'}
-      </button>
-    </div>
-  );
-}
-
-function ViewMatchCard({ court, label, home, away, result, winner, golden, showPlayers }) {
-  const done = isConfirmedGroup(result) || (result?.confirmed && result.a != null);
+function ViewMatchCard({ court, label, home, away, result, winner, manualWinner, status, showPlayers }) {
+  const { byId } = useContext(Data);
+  const done = !!result;
   const a = done ? result.a : null;
   const b = done ? result.b : null;
   const win = winner ?? (done && a !== b ? (a > b ? home : away) : null);
   return (
-    <article className={`match status-${done ? 'done' : 'open'}`}>
+    <article className={`match status-${status}`}>
       <header className="match-head">
         <CourtBadge court={court} />
         {label && <span className="final-label">{label}</span>}
-        <StatusChip status={done ? 'done' : 'open'} />
+        <StatusChip status={status} />
       </header>
       <div className="match-body">
         {[
@@ -1401,9 +2074,9 @@ function ViewMatchCard({ court, label, home, away, result, winner, golden, showP
         ].map(([id, score]) => (
           <div key={id} className={`team-score ${win === id ? 'is-winner' : ''}`}>
             <div className="team-score-name">
-              <span className="team-name">{TEAM_BY_ID[id].name}</span>
-              {showPlayers && <span className="players">{TEAM_BY_ID[id].players.join(' & ')}</span>}
-              {golden === id && <span className="tag">Golden Point</span>}
+              <span className="team-name">{byId[id].name}</span>
+              {showPlayers && <span className="players">{byId[id].players.join(' & ')}</span>}
+              {manualWinner === id && <span className="tag">Sieger festgelegt</span>}
             </div>
             <span className="score-locked num">{score ?? '–'}</span>
           </div>
@@ -1412,8 +2085,6 @@ function ViewMatchCard({ court, label, home, away, result, winner, golden, showP
     </article>
   );
 }
-
-/* ---------------- Kleinteile ---------------- */
 
 function SectionHead({ title, note }) {
   return (
@@ -1428,21 +2099,22 @@ function CourtBadge({ court }) {
   return (
     <span className={`court-badge court-${court}`}>
       <span className="court-id">{court}</span>
-      <span className="court-side">{courtSide[court]}</span>
     </span>
   );
 }
 
 function StatusChip({ status }) {
-  const label = { open: 'Offen', entered: 'Nicht bestätigt', done: 'Abgeschlossen' }[status];
-  return <span className={`chip chip-${status}`}>{label}</span>;
+  const label = { open: 'Offen', running: 'Läuft', done: 'Abgeschlossen', stale: 'Veraltet', locked: 'Gesperrt' }[status] || 'Offen';
+  const cls = { open: 'open', running: 'entered', done: 'done' }[status] || 'open';
+  return <span className={`chip chip-${cls}`}>{label}</span>;
 }
 
-function BallMark() {
+function Logo({ big = false }) {
   return (
-    <svg className="ball-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="14" className="ball-fill" />
-      <path d="M5 9c6 3 6 11 0 14M27 9c-6 3-6 11 0 14" className="ball-seam" />
+    <svg className={`ball-mark mx-logo ${big ? 'is-big' : ''}`} viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="15" className="mx-logo-ring" />
+      <circle cx="16" cy="16" r="12" className="ball-fill" />
+      <path d="M7 10c5 3 5 9 0 12M25 10c-5 3-5 9 0 12" className="ball-seam" />
     </svg>
   );
 }
@@ -1454,12 +2126,14 @@ function Icon({ name }) {
     table: 'M4 5h16M4 10h16M4 15h16M4 20h16M9 5v15',
     trophy: 'M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 20h8',
     medal: 'M8 3l4 7 4-7M12 21a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
+    gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1',
     check: 'M5 12l5 5L19 7',
     x: 'M6 6l12 12M18 6 6 18',
     share: 'M12 4v12M7 9l5-5 5 5M5 14v6h14v-6',
     reset: 'M4 12a8 8 0 1 0 3-6.2M4 4v4h4',
     lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
-    sync: 'M20 11a8 8 0 0 0-14.3-4.9M4 5v4h4M4 13a8 8 0 0 0 14.3 4.9M20 19v-4h-4',
+    print: 'M7 9V4h10v5M7 17H4v-7h16v7h-3M7 14h10v6H7z',
+    tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
   };
   return (
     <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1467,3 +2141,5 @@ function Icon({ name }) {
     </svg>
   );
 }
+
+export { DEFAULT_TIMES, DEFAULT_TEAMS };

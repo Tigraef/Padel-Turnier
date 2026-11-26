@@ -5,142 +5,193 @@ export const TOURNAMENT = {
   name: 'TJ Padel Masters',
   date: '2026-11-29',
   dateLabel: 'Sonntag, 29. November 2026',
-  startTime: '11:00',
-  endTime: '14:00',
-  roundMinutes: 20,
-  pauseAfterRound: 4, // kurze Pause mit Gebäck in der Mitte
-  pauseMinutes: 10,
+  venue: 'Hanse Padel Hamburg',
+  timeZone: 'Europe/Berlin',
 };
 
-// Platzhalter – echte Teamnamen und Spieler hier eintragen. Die IDs (t1 … t8) bitte nicht ändern,
-// sonst passen bereits gespeicherte Ergebnisse nicht mehr zum Spielplan.
-export const TEAMS = [
-  { id: 't1', seed: 1, name: 'Team 1', players: ['Spieler 1', 'Spieler 2'] },
-  { id: 't2', seed: 2, name: 'Team 2', players: ['Spieler 3', 'Spieler 4'] },
-  { id: 't3', seed: 3, name: 'Team 3', players: ['Spieler 5', 'Spieler 6'] },
-  { id: 't4', seed: 4, name: 'Team 4', players: ['Spieler 7', 'Spieler 8'] },
-  { id: 't5', seed: 5, name: 'Team 5', players: ['Spieler 9', 'Spieler 10'] },
-  { id: 't6', seed: 6, name: 'Team 6', players: ['Spieler 11', 'Spieler 12'] },
-  { id: 't7', seed: 7, name: 'Team 7', players: ['Spieler 13', 'Spieler 14'] },
-  { id: 't8', seed: 8, name: 'Team 8', players: ['Spieler 15', 'Spieler 16'] },
-];
+// Standard-Zeitplan. Die Turnierleitung kann alles im Admin-Bereich ändern (gespeichert unter settings/times).
+export const DEFAULT_TIMES = {
+  start: '11:00',
+  roundMinutes: 20,
+  pauseAfterRound: 4,
+  pauseMinutes: 10,
+  evalMinutes: 5,
+  end: '14:00',
+  overrides: {}, // { 1: '11:05', …, finals: '13:40' } – abweichende Startzeiten einzelner Runden
+};
 
-export const TEAM_BY_ID = Object.fromEntries(TEAMS.map((t) => [t.id, t]));
-
-// Reihenfolge = Blick vom Eingang (links nach rechts). Bezeichnungen bei Bedarf anpassen.
-export const COURTS = [
-  { id: 'C1', side: '' },
-  { id: 'C2', side: '' },
-  { id: 'C3', side: '' },
-  { id: 'C4', side: '' },
+// Teams laut Ausschreibung. Namen und Spieler sind im Admin-Bereich änderbar (settings „teams/<id>“);
+// die IDs t1 … t8 entsprechen den Nummern 1 … 8 aus dem Spielplan und bleiben fest.
+export const DEFAULT_TEAMS = [
+  { id: 't1', seed: 1, name: 'Die Lobster', players: ['Tim', 'Jana'] },
+  { id: 't2', seed: 2, name: 'Spannenlanger Hansel, nudeldicke Dirn', players: ['Steffi', 'Lars'] },
+  { id: 't3', seed: 3, name: 'Die Schmetterlinge', players: ['Liza', 'Tobi'] },
+  { id: 't4', seed: 4, name: 'Scheiben Schubser', players: ['Kevin', 'Maria'] },
+  { id: 't5', seed: 5, name: 'Netzfetzer', players: ['Lennart', 'Bendix'] },
+  { id: 't6', seed: 6, name: 'Poco a Poco', players: ['Alex', 'Zara'] },
+  { id: 't7', seed: 7, name: 'Die Osi’s', players: ['Bosi', 'Sophie'] },
+  { id: 't8', seed: 8, name: 'Der Schlägertrupp', players: ['Hannes', 'Max'] },
 ];
+export const TEAM_IDS = DEFAULT_TEAMS.map((t) => t.id);
+const SEED = Object.fromEntries(DEFAULT_TEAMS.map((t) => [t.id, t.seed]));
+export const LOBSTER = 't1';
+export const LOBSTER_COURT = 'D8';
+
+export const COURTS = ['D6', 'D7', 'D8', 'D9'];
 
 export const ROUNDS = 7;
 export const MATCHES_PER_ROUND = 4;
-export const GROUP_MAX_GAMES = 8;
-export const FINAL_FORMATS = [7, 9]; // Best of 7 oder Best of 9 Games – je nach Restzeit
-export const DEFAULT_FINAL_GAMES = 9;
+export const GROUP_GAMES = 8;
 
-// Fester Spielplan (Rundenturnier, jedes Team spielt in jeder Runde).
-// Die Courts sind so verteilt, dass kein Team öfter als zweimal auf demselben Court spielt.
+// Verbindlicher Spielplan (Team-Nummern, Reihenfolge der Courts D6, D7, D8, D9).
 const FIXED = [
-  [['t8', 't7'], ['t1', 't6'], ['t2', 't5'], ['t3', 't4']],
-  [['t8', 't1'], ['t2', 't7'], ['t3', 't6'], ['t4', 't5']],
-  [['t3', 't1'], ['t5', 't6'], ['t4', 't7'], ['t8', 't2']],
-  [['t4', 't2'], ['t5', 't1'], ['t8', 't3'], ['t6', 't7']],
-  [['t5', 't3'], ['t8', 't4'], ['t6', 't2'], ['t7', 't1']],
-  [['t6', 't4'], ['t7', 't3'], ['t8', 't5'], ['t1', 't2']],
-  [['t7', 't5'], ['t2', 't3'], ['t1', 't4'], ['t8', 't6']],
+  [[3, 6], [2, 7], [1, 8], [4, 5]],
+  [[8, 6], [3, 4], [1, 7], [2, 5]],
+  [[7, 5], [8, 4], [1, 6], [2, 3]],
+  [[6, 4], [7, 3], [1, 5], [8, 2]],
+  [[5, 3], [6, 2], [1, 4], [7, 8]],
+  [[4, 2], [5, 8], [1, 3], [6, 7]],
+  [[3, 8], [4, 7], [1, 2], [5, 6]],
 ];
 
 export const SCHEDULE = FIXED.flatMap((round, r) =>
   round.map(([home, away], c) => ({
-    id: `r${r + 1}-${COURTS[c].id}`,
+    id: `r${r + 1}-${COURTS[c]}`,
     round: r + 1,
-    court: COURTS[c].id,
-    home,
-    away,
+    court: COURTS[c],
+    home: `t${home}`,
+    away: `t${away}`,
   })),
 );
 
-// Platzierungsspiele parallel auf allen vier Courts (Finale auf dem ersten Court).
+// Platzierungsspiele nach der Abschlusstabelle der Vorrunde.
 export const FINALS = [
-  { id: 'final', court: 'C1', label: 'Finale', places: [1, 2] },
-  { id: 'p3', court: 'C2', label: 'Spiel um Platz 3', places: [3, 4] },
-  { id: 'p5', court: 'C3', label: 'Spiel um Platz 5', places: [5, 6] },
-  { id: 'p7', court: 'C4', label: 'Spiel um Platz 7', places: [7, 8] },
+  { id: 'final', court: 'D8', label: 'Finale', places: [1, 2] },
+  { id: 'p3', court: 'D7', label: 'Spiel um Platz 3', places: [3, 4] },
+  { id: 'p5', court: 'D6', label: 'Spiel um Platz 5', places: [5, 6] },
+  { id: 'p7', court: 'D9', label: 'Spiel um Platz 7', places: [7, 8] },
 ];
 
-// Gespeichert im Abschnitt „finals“ unter diesem Schlüssel, damit die Wahl auf beiden Handys
-// und in der Live-Ansicht ankommt (confirmed: true, sonst filtert die Live-Ansicht sie heraus).
-export const FORMAT_KEY = 'format';
+// ---------- Teams ----------
 
-export function finalMaxGames(finals) {
-  const g = finals?.[FORMAT_KEY]?.games;
-  return FINAL_FORMATS.includes(g) ? g : DEFAULT_FINAL_GAMES;
+/** Teams mit den Änderungen der Turnierleitung (settings „teams/<id>“ = { name, players }). */
+export function resolveTeams(settings = {}) {
+  return DEFAULT_TEAMS.map((t) => {
+    const o = settings[`teams/${t.id}`];
+    if (!o) return t;
+    const players = Array.isArray(o.players) ? [o.players[0] ?? t.players[0], o.players[1] ?? t.players[1]] : t.players;
+    return { ...t, name: (o.name || '').trim() || t.name, players };
+  });
 }
 
-export function finalsSkipped(finals) {
-  return finals?.[FORMAT_KEY]?.skip === true;
+export function teamMap(teams = DEFAULT_TEAMS) {
+  return Object.fromEntries(teams.map((t) => [t.id, t]));
 }
 
-const toClock = (total) => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+// ---------- Zeitplan ----------
 
-/** Geplante Startzeit einer Runde; Runde ROUNDS + 1 = Platzierungsspiele. */
-export function roundStartTime(round) {
-  const [h, m] = TOURNAMENT.startTime.split(':').map(Number);
-  const pause = round > TOURNAMENT.pauseAfterRound ? TOURNAMENT.pauseMinutes : 0;
-  return toClock(h * 60 + m + (round - 1) * TOURNAMENT.roundMinutes + pause);
+const toMin = (hhmm) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+export const toClock = (total) => {
+  const t = ((Math.round(total) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+};
+export const isClock = (v) => toMin(v) != null && toMin(v) < 1440;
+
+export function resolveTimes(settings = {}) {
+  const t = { ...DEFAULT_TIMES, ...(settings.times || {}) };
+  return { ...t, overrides: { ...(t.overrides || {}) } };
 }
 
-export function pauseTime() {
-  const [h, m] = TOURNAMENT.startTime.split(':').map(Number);
-  const start = h * 60 + m + TOURNAMENT.pauseAfterRound * TOURNAMENT.roundMinutes;
-  return { from: toClock(start), to: toClock(start + TOURNAMENT.pauseMinutes) };
+/**
+ * Berechnet den kompletten Zeitplan. Jede Runde beginnt nach der vorherigen (plus Pause nach
+ * pauseAfterRound), außer die Turnierleitung hat für eine Runde eine eigene Startzeit gesetzt.
+ */
+export function timeline(times = DEFAULT_TIMES) {
+  const rm = Number(times.roundMinutes) || DEFAULT_TIMES.roundMinutes;
+  const pm = Math.max(0, Number(times.pauseMinutes) || 0);
+  const em = Math.max(0, Number(times.evalMinutes) || 0);
+  const ov = times.overrides || {};
+  const rounds = [];
+  let cursor = toMin(times.start) ?? toMin(DEFAULT_TIMES.start);
+  let pause = null;
+  for (let r = 1; r <= ROUNDS; r++) {
+    const start = toMin(ov[r]) ?? cursor;
+    rounds.push({ round: r, start, end: start + rm, from: toClock(start), to: toClock(start + rm) });
+    cursor = start + rm;
+    if (r === Number(times.pauseAfterRound) && pm > 0) {
+      pause = { start: cursor, end: cursor + pm, from: toClock(cursor), to: toClock(cursor + pm) };
+      cursor += pm;
+    }
+  }
+  const evalStart = cursor;
+  const finalsStart = toMin(ov.finals) ?? evalStart + em;
+  const end = toMin(times.end) ?? toMin(DEFAULT_TIMES.end);
+  return {
+    rounds,
+    pause,
+    evaluation: { start: evalStart, end: finalsStart, from: toClock(evalStart), to: toClock(finalsStart) },
+    finals: { start: finalsStart, from: toClock(finalsStart) },
+    end: { start: end, from: toClock(end) },
+    roundMinutes: rm,
+    pauseMinutes: pm,
+  };
+}
+
+/** Minuten seit Mitternacht in Berlin für einen Zeitpunkt. */
+export function berlinMinutes(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('de-DE', { timeZone: TOURNAMENT.timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+    const get = (type) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+    return get('hour') * 60 + get('minute') + get('second') / 60;
+  } catch {
+    return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+  }
 }
 
 // ---------- Spielplanprüfung ----------
 
-export function validateSchedule(schedule = SCHEDULE, teams = TEAMS) {
+export function validateSchedule(schedule = SCHEDULE) {
   const checks = [];
   const keys = schedule.map((m) => [m.home, m.away].sort().join('|'));
   const unique = new Set(keys);
-  const expectedPairs = (teams.length * (teams.length - 1)) / 2;
   checks.push({
-    label: `${expectedPairs} unterschiedliche Paarungen`,
-    ok: schedule.length === expectedPairs && unique.size === expectedPairs && schedule.every((m) => m.home !== m.away),
+    label: '28 Vorrundenbegegnungen, keine doppelt',
+    ok: schedule.length === 28 && unique.size === 28 && schedule.every((m) => m.home !== m.away),
     detail: `${unique.size} unterschiedliche Paarungen bei ${schedule.length} Spielen`,
   });
 
-  const rounds = [...new Set(schedule.map((m) => m.round))].sort((a, b) => a - b);
-  const badRounds = rounds.filter((r) => {
+  const perTeam = TEAM_IDS.map((id) => schedule.filter((m) => m.home === id || m.away === id).length);
+  checks.push({
+    label: 'Jedes Team spielt genau 7 Vorrundenmatches',
+    ok: perTeam.every((n) => n === ROUNDS),
+    detail: perTeam.every((n) => n === ROUNDS) ? 'Alle 8 Teams mit 7 Matches' : `Anzahl je Team: ${perTeam.join(', ')}`,
+  });
+
+  const bad = [];
+  for (let r = 1; r <= ROUNDS; r++) {
     const inRound = schedule.filter((m) => m.round === r);
     const ids = inRound.flatMap((m) => [m.home, m.away]);
     const courts = new Set(inRound.map((m) => m.court));
-    return (
-      ids.length !== teams.length ||
-      new Set(ids).size !== teams.length ||
-      !teams.every((t) => ids.includes(t.id)) ||
-      courts.size !== inRound.length
-    );
-  });
-  checks.push({
-    label: 'Jedes Team spielt genau einmal pro Runde – niemand setzt aus',
-    ok: rounds.length === ROUNDS && badRounds.length === 0,
-    detail: badRounds.length ? `Fehler in Runde ${badRounds.join(', ')}` : `${rounds.length} Runden auf ${MATCHES_PER_ROUND} Courts geprüft`,
-  });
-
-  const overused = [];
-  for (const t of teams) {
-    for (const c of COURTS) {
-      const n = schedule.filter((m) => m.court === c.id && (m.home === t.id || m.away === t.id)).length;
-      if (n > 2) overused.push(`${t.name} ${n}× auf ${c.id}`);
-    }
+    if (new Set(ids).size !== ids.length || ids.length !== 8) bad.push(`Runde ${r}: Team doppelt oder fehlt`);
+    if (courts.size !== COURTS.length || !COURTS.every((c) => courts.has(c))) bad.push(`Runde ${r}: nicht alle Courts belegt`);
   }
   checks.push({
-    label: 'Courts gleichmäßig verteilt (höchstens 2× derselbe Court)',
-    ok: overused.length === 0,
-    detail: overused.length ? overused.join(', ') : 'Jedes Team wechselt regelmäßig den Court',
+    label: 'Pro Runde jedes Team einmal, alle vier Courts belegt',
+    ok: bad.length === 0,
+    detail: bad.length ? bad.join(' · ') : `${ROUNDS} Runden geprüft`,
+  });
+
+  const lobsterWrong = [];
+  for (let r = 1; r <= ROUNDS; r++) {
+    if (!schedule.some((m) => m.round === r && m.court === LOBSTER_COURT && (m.home === LOBSTER || m.away === LOBSTER))) lobsterWrong.push(r);
+  }
+  checks.push({
+    label: 'Die Lobster spielen jede Vorrunde auf D8',
+    ok: lobsterWrong.length === 0,
+    detail: lobsterWrong.length ? `Nicht auf D8 in Runde ${lobsterWrong.join(', ')}` : 'In allen 7 Runden auf D8',
   });
 
   return { ok: checks.every((c) => c.ok), checks };
@@ -150,42 +201,42 @@ export function validateSchedule(schedule = SCHEDULE, teams = TEAMS) {
 
 const isInt = (v) => Number.isInteger(v) && v >= 0;
 
-export function validateGroupScore(a, b) {
+/**
+ * Vorrunde: regulär genau 8 Games. Weniger nur bei Spielabbruch wegen Zeitmangel – das muss die
+ * Turnierleitung ausdrücklich bestätigen (short: true). Mehr als 8 sind nicht möglich.
+ */
+export function validateGroupScore(a, b, short = false) {
   if (a == null || b == null || a === '' || b === '') return { ok: false, error: 'Bitte beide Ergebnisse eintragen.' };
   if (!isInt(a) || !isInt(b)) return { ok: false, error: 'Nur ganze Zahlen ab 0 sind erlaubt.' };
-  if (a + b > GROUP_MAX_GAMES) {
-    return { ok: false, error: `Höchstens ${GROUP_MAX_GAMES} Games pro Vorrundenspiel (eingetragen: ${a + b}).` };
+  const total = a + b;
+  if (total > GROUP_GAMES) return { ok: false, error: `Höchstens ${GROUP_GAMES} Games pro Vorrundenspiel (eingetragen: ${total}).` };
+  if (total < GROUP_GAMES && !short) {
+    return { ok: false, needsShort: true, error: `${total} von ${GROUP_GAMES} Games – nur bei Abbruch wegen Zeitmangel bestätigen.` };
   }
-  return { ok: true, error: null };
-}
-
-export function validateFinalScore(a, b, golden, teamA, teamB, maxGames = DEFAULT_FINAL_GAMES) {
-  if (a == null || b == null || a === '' || b === '') return { ok: false, error: 'Bitte beide Ergebnisse eintragen.', winner: null };
-  if (!isInt(a) || !isInt(b)) return { ok: false, error: 'Nur ganze Zahlen ab 0 sind erlaubt.', winner: null };
-  const toWin = Math.ceil(maxGames / 2);
-  if (a + b > maxGames) {
-    return { ok: false, error: `Höchstens ${maxGames} Games pro Platzierungsspiel (eingetragen: ${a + b}).`, winner: null };
-  }
-  if (a > toWin || b > toWin) {
-    return { ok: false, error: `Best of ${maxGames}: Mit ${toWin} Games ist das Spiel gewonnen.`, winner: null };
-  }
-  if (a === b) {
-    if (golden !== teamA && golden !== teamB) {
-      return { ok: false, error: 'Unentschieden: Bitte den Gewinner des entscheidenden Golden Points wählen.', winner: null, needsGolden: true };
-    }
-    return { ok: true, error: null, winner: golden, needsGolden: true };
-  }
-  return { ok: true, error: null, winner: a > b ? teamA : teamB, needsGolden: false };
+  return { ok: true, error: null, short: total < GROUP_GAMES };
 }
 
 export function isConfirmedGroup(result) {
-  return !!result && result.confirmed === true && validateGroupScore(result.a, result.b).ok;
+  return !!result && result.confirmed === true && validateGroupScore(result.a, result.b, !!result.short).ok;
+}
+
+/** Platzierungsspiele: keine Begrenzung der Games. Bei Gleichstand legt die Turnierleitung den Sieger fest. */
+export function validateFinalScore(a, b, winner, teamA, teamB) {
+  if (a == null || b == null || a === '' || b === '') return { ok: false, error: 'Bitte beide Ergebnisse eintragen.', winner: null };
+  if (!isInt(a) || !isInt(b)) return { ok: false, error: 'Nur ganze Zahlen ab 0 sind erlaubt.', winner: null };
+  if (a === b) {
+    if (winner !== teamA && winner !== teamB) {
+      return { ok: false, error: 'Gleichstand: Bitte den Sieger festlegen.', winner: null, needsWinner: true };
+    }
+    return { ok: true, error: null, winner, needsWinner: true };
+  }
+  return { ok: true, error: null, winner: a > b ? teamA : teamB, needsWinner: false };
 }
 
 // ---------- Tabelle ----------
 
-function emptyRow(team) {
-  return { teamId: team.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, diff: 0, pts: 0 };
+function emptyRow(id) {
+  return { teamId: id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, diff: 0, pts: 0 };
 }
 
 function addResult(row, gf, ga) {
@@ -204,12 +255,8 @@ function addResult(row, gf, ga) {
   }
 }
 
-function confirmedMatches(schedule, results, upToRound) {
-  return schedule.filter((m) => m.round <= upToRound && isConfirmedGroup(results[m.id]));
-}
-
 function statsFor(teamIds, matches, results) {
-  const rows = Object.fromEntries(teamIds.map((id) => [id, emptyRow(TEAM_BY_ID[id] ?? { id })]));
+  const rows = Object.fromEntries(teamIds.map((id) => [id, emptyRow(id)]));
   for (const m of matches) {
     if (!(m.home in rows) || !(m.away in rows)) continue;
     const { a, b } = results[m.id];
@@ -221,9 +268,8 @@ function statsFor(teamIds, matches, results) {
 
 const cmpStats = (x, y) => y.pts - x.pts || y.diff - x.diff || y.gf - x.gf;
 
-// Teilt eine sortierte Liste in Gruppen mit identischen Werten.
 function splitEqual(ids, stats) {
-  const sorted = [...ids].sort((a, b) => cmpStats(stats[a], stats[b]) || TEAM_BY_ID[a].seed - TEAM_BY_ID[b].seed);
+  const sorted = [...ids].sort((a, b) => cmpStats(stats[a], stats[b]) || SEED[a] - SEED[b]);
   const groups = [];
   for (const id of sorted) {
     const last = groups[groups.length - 1];
@@ -234,28 +280,22 @@ function splitEqual(ids, stats) {
 }
 
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
-const names = (ids) => ids.map((id) => TEAM_BY_ID[id].name).join(', ');
+export const formatDiff = signed;
 
-// Direkter Vergleich: Mini-Tabelle nur aus den Spielen der punktgleichen Teams untereinander
-// (Punkte, dann Game-Differenz, dann gewonnene Games). Bleibt eine Teilgruppe gleich,
-// wird der direkte Vergleich nur unter diesen Teams wiederholt.
-function resolveHeadToHead(ids, matches, results, notes) {
+function resolveHeadToHead(ids, matches, results, notes, nameOf) {
+  const names = (list) => list.map(nameOf).join(', ');
   const mini = statsFor(ids, matches, results);
   const groups = splitEqual(ids, mini);
   const played = matches.filter((m) => ids.includes(m.home) && ids.includes(m.away)).length;
   const detail = ids
     .map((id) => mini[id])
     .sort(cmpStats)
-    .map((r) => `${TEAM_BY_ID[r.teamId].name} ${r.pts} Pkt, ${signed(r.diff)}, ${r.gf} Games`)
+    .map((r) => `${nameOf(r.teamId)} ${r.pts} Pkt, ${signed(r.diff)}, ${r.gf} Games`)
     .join(' · ');
-
   if (groups.length === 1) {
     notes.push({
       kind: 'unresolved',
-      text:
-        played === 0
-          ? `Direkter Vergleich ${names(ids)}: noch kein Spiel gegeneinander – Gleichstand bleibt.`
-          : `Direkter Vergleich ${names(ids)}: weiterhin gleich (${detail}).`,
+      text: played === 0 ? `Direkter Vergleich ${names(ids)}: noch kein Spiel gegeneinander – Gleichstand bleibt.` : `Direkter Vergleich ${names(ids)}: weiterhin gleich (${detail}).`,
     });
     return [ids];
   }
@@ -263,7 +303,7 @@ function resolveHeadToHead(ids, matches, results, notes) {
   const slots = [];
   for (const g of groups) {
     if (g.length === 1) slots.push(g);
-    else slots.push(...resolveHeadToHead(g, matches, results, notes));
+    else slots.push(...resolveHeadToHead(g, matches, results, notes, nameOf));
   }
   return slots;
 }
@@ -273,44 +313,35 @@ export function tieKey(upToRound, row, ids) {
 }
 
 /**
- * Berechnet die Tabelle nach `upToRound` aus allen bestätigten Matches bis einschließlich dieser Runde.
- * manualTies: { [tieKey]: [teamId, ...] } – manuelle Entscheidung des Organisators bei echtem Gleichstand.
+ * Tabelle nach `upToRound` aus allen bestätigten Vorrundenspielen.
+ * Reihenfolge: Punkte → Game-Differenz → gewonnene Games → direkter Vergleich → manuelle Entscheidung.
  */
-export function computeStandings(results, { upToRound = ROUNDS, manualTies = {}, schedule = SCHEDULE, teams = TEAMS } = {}) {
-  const matches = confirmedMatches(schedule, results, upToRound);
-  const stats = statsFor(
-    teams.map((t) => t.id),
-    matches,
-    results,
-  );
+export function computeStandings(results, { upToRound = ROUNDS, manualTies = {}, teams = DEFAULT_TEAMS, schedule = SCHEDULE } = {}) {
+  const byId = teamMap(teams);
+  const nameOf = (id) => byId[id]?.name ?? id;
+  const matches = schedule.filter((m) => m.round <= upToRound && isConfirmedGroup(results[m.id]));
+  const stats = statsFor(TEAM_IDS, matches, results);
   const notes = [];
   const unresolved = [];
   const slots = [];
 
-  for (const group of splitEqual(
-    teams.map((t) => t.id),
-    stats,
-  )) {
+  for (const group of splitEqual(TEAM_IDS, stats)) {
     if (group.length === 1) {
       slots.push({ ids: group, method: null });
       continue;
     }
     const s = stats[group[0]];
-    notes.push({
-      kind: 'tie',
-      text: `Gleich nach Punkten, Game-Differenz und gewonnenen Games (${s.pts} Pkt, ${signed(s.diff)}, ${s.gf} Games): ${names(group)}.`,
-    });
-    for (const sub of resolveHeadToHead(group, matches, results, notes)) {
+    notes.push({ kind: 'tie', text: `Gleich nach Punkten, Game-Differenz und gewonnenen Games (${s.pts} Pkt, ${signed(s.diff)}, ${s.gf} Games): ${group.map(nameOf).join(', ')}.` });
+    for (const sub of resolveHeadToHead(group, matches, results, notes, nameOf)) {
       if (sub.length === 1) {
         slots.push({ ids: sub, method: 'h2h' });
         continue;
       }
       const key = tieKey(upToRound, stats[sub[0]], sub);
       const manual = manualTies[key];
-      const validManual =
-        Array.isArray(manual) && manual.length === sub.length && sub.every((id) => manual.includes(id));
+      const validManual = Array.isArray(manual) && manual.length === sub.length && sub.every((id) => manual.includes(id));
       if (validManual) {
-        notes.push({ kind: 'manual', text: `Manuelle Entscheidung des Organisators: ${names(manual)}.` });
+        notes.push({ kind: 'manual', text: `Manuelle Entscheidung der Turnierleitung: ${manual.map(nameOf).join(', ')}.` });
         for (const id of manual) slots.push({ ids: [id], method: 'manual', key });
       } else {
         unresolved.push({ key, ids: sub });
@@ -322,22 +353,20 @@ export function computeStandings(results, { upToRound = ROUNDS, manualTies = {},
   const rows = [];
   let pos = 1;
   for (const slot of slots) {
-    const ordered = [...slot.ids].sort((a, b) => TEAM_BY_ID[a].seed - TEAM_BY_ID[b].seed);
+    const ordered = [...slot.ids].sort((a, b) => SEED[a] - SEED[b]);
     for (const id of ordered) {
       rows.push({
         ...stats[id],
-        team: TEAM_BY_ID[id],
+        team: byId[id],
         rank: pos,
         position: rows.length + 1,
         tied: slot.method === 'unresolved',
         tieKey: slot.key ?? null,
-        tieIds: slot.method === 'unresolved' ? ordered : null,
         decidedBy: slot.method,
       });
     }
     pos += slot.ids.length;
   }
-
   return { rows, notes, unresolved, confirmedCount: matches.length, upToRound };
 }
 
@@ -346,7 +375,7 @@ export function groupProgress(results, schedule = SCHEDULE) {
   return { confirmed, total: schedule.length, complete: confirmed === schedule.length };
 }
 
-// Erste Runde mit noch offenem Spiel; 'finals' wenn alle Vorrundenspiele bestätigt sind.
+/** Erste Runde mit noch offenem Spiel; 'finals', wenn alle Vorrundenspiele bestätigt sind. */
 export function currentRound(results, schedule = SCHEDULE) {
   for (let r = 1; r <= ROUNDS; r++) {
     if (schedule.some((m) => m.round === r && !isConfirmedGroup(results[m.id]))) return r;
@@ -354,148 +383,203 @@ export function currentRound(results, schedule = SCHEDULE) {
   return 'finals';
 }
 
-// Letzte Runde, deren Spiele alle bestätigt sind (0 = noch keine).
-export function lastCompleteRound(results, schedule = SCHEDULE) {
-  let last = 0;
-  for (let r = 1; r <= ROUNDS; r++) {
-    if (schedule.filter((m) => m.round === r).every((m) => isConfirmedGroup(results[m.id]))) last = r;
-    else break;
-  }
-  return last;
+/** Status einer Vorrundenbegegnung: open (offen), running (läuft), done (abgeschlossen). */
+export function groupMatchStatus(match, result, settings = {}) {
+  if (isConfirmedGroup(result)) return 'done';
+  if (result && (result.a != null || result.b != null)) return 'running';
+  const r = settings[`rounds/${match.round}`];
+  if (r && r.started && !r.ended) return 'running';
+  return 'open';
 }
 
 // ---------- Platzierungsspiele ----------
 
-/**
- * Erzeugt die Platzierungsspiele aus der endgültigen Vorrundentabelle.
- * Gesperrt, solange nicht alle 28 Spiele bestätigt sind oder ein ungeklärter
- * Gleichstand über die Grenze zweier Platzierungsspiele hinweg besteht.
- */
-export function finalPairings(results, manualTies = {}, schedule = SCHEDULE) {
+export function finalsMode(settings = {}) {
+  return settings.finalsMode?.mode === 'skip' ? 'skip' : 'play';
+}
+
+export function finalPairings(results, manualTies = {}, { teams = DEFAULT_TEAMS, schedule = SCHEDULE } = {}) {
   const progress = groupProgress(results, schedule);
   if (!progress.complete) {
     return { unlocked: false, reason: `Noch ${progress.total - progress.confirmed} Vorrundenspiele offen.`, pairings: null, standings: null, blocking: [] };
   }
-  const standings = computeStandings(results, { upToRound: ROUNDS, manualTies, schedule });
+  const standings = computeStandings(results, { manualTies, teams, schedule });
   const pairOf = (position) => Math.ceil(position / 2);
   const blocking = standings.unresolved.filter((g) => {
     const positions = standings.rows.filter((r) => g.ids.includes(r.teamId)).map((r) => pairOf(r.position));
     return new Set(positions).size > 1;
   });
   if (blocking.length) {
-    return {
-      unlocked: false,
-      reason: 'Ungeklärter Gleichstand in der Vorrundentabelle – bitte in der Tabelle manuell entscheiden.',
-      pairings: null,
-      standings,
-      blocking,
-    };
+    return { unlocked: false, reason: 'Ungeklärter Gleichstand in der Tabelle – bitte in der Tabelle manuell entscheiden.', pairings: null, standings, blocking };
   }
   const byPos = (p) => standings.rows[p - 1].teamId;
-  const pairings = Object.fromEntries(
-    FINALS.map((f) => [f.id, { ...f, teamA: byPos(f.places[0]), teamB: byPos(f.places[1]) }]),
-  );
+  const pairings = Object.fromEntries(FINALS.map((f) => [f.id, { ...f, teamA: byPos(f.places[0]), teamB: byPos(f.places[1]) }]));
   return { unlocked: true, reason: null, pairings, standings, blocking: [] };
 }
 
 /**
- * Ordnet ein gespeichertes Finalergebnis der aktuellen Paarung zu.
- * Gespeicherte Ergebnisse enthalten immer die Team-IDs. Passt die Paarung nicht mehr,
- * wird das Ergebnis als „veraltet“ markiert und nicht gewertet.
+ * Ordnet ein gespeichertes Platzierungsspiel der aktuellen Paarung zu.
+ * status: locked | open | running | done | stale (Paarung hat sich durch eine Korrektur geändert)
  */
-export function finalMatchState(pairing, stored, maxGames = DEFAULT_FINAL_GAMES) {
+export function finalMatchState(pairing, stored) {
   if (!pairing) return { status: 'locked' };
-  if (!stored || (stored.a == null && stored.b == null)) return { status: 'empty', a: null, b: null, golden: null };
+  if (!stored) return { status: 'open', a: null, b: null, winner: null };
   const same = stored.teamA === pairing.teamA && stored.teamB === pairing.teamB;
   const swapped = stored.teamA === pairing.teamB && stored.teamB === pairing.teamA;
   if (!same && !swapped) return { status: 'stale', stored };
-  const a = same ? stored.a : stored.b;
-  const b = same ? stored.b : stored.a;
-  const v = validateFinalScore(a, b, stored.golden, pairing.teamA, pairing.teamB, maxGames);
-  return {
-    status: stored.confirmed && v.ok ? 'confirmed' : 'entered',
-    a,
-    b,
-    golden: stored.golden ?? null,
-    winner: v.ok ? v.winner : null,
-    validation: v,
-  };
+  const a = same ? stored.a ?? null : stored.b ?? null;
+  const b = same ? stored.b ?? null : stored.a ?? null;
+  const v = validateFinalScore(a, b, stored.winner, pairing.teamA, pairing.teamB);
+  const status = stored.confirmed && v.ok ? 'done' : stored.started || a != null || b != null ? 'running' : 'open';
+  return { status, a, b, winner: v.ok ? v.winner : null, manualWinner: stored.winner ?? null, validation: v };
 }
 
-export function finalRanking(results, finalsResults, manualTies = {}, schedule = SCHEDULE) {
-  const fp = finalPairings(results, manualTies, schedule);
-  if (!fp.unlocked) return { complete: false, places: [], pairings: fp, skipped: false };
-  // Keine Zeit mehr für Platzierungsspiele: dann zählt die Abschlusstabelle.
-  if (finalsSkipped(finalsResults)) {
-    const open = fp.standings.unresolved.length > 0;
-    const places = fp.standings.rows.map((r) => ({ place: r.position, teamId: r.teamId, decided: !open, candidates: open ? [r.teamId] : undefined, fromTable: true }));
-    return { complete: !open, places, pairings: fp, skipped: true };
-  }
+/**
+ * Endgültige Platzierung 1–8. Gespielte Platzierungsspiele entscheiden ihr Paar; fehlt ein Spiel
+ * (übersprungen oder Turnier abgeschlossen), zählt die Reihenfolge der Abschlusstabelle.
+ */
+export function finalRanking(results, finals = {}, manualTies = {}, settings = {}, { teams = DEFAULT_TEAMS, schedule = SCHEDULE } = {}) {
+  const fp = finalPairings(results, manualTies, { teams, schedule });
+  const skipped = finalsMode(settings) === 'skip';
+  const closed = !!settings.closed?.at;
+  if (!fp.unlocked) return { complete: false, places: [], pairings: fp, skipped, closed };
   const places = [];
-  let done = 0;
+  let decided = 0;
   for (const f of FINALS) {
     const p = fp.pairings[f.id];
-    const st = finalMatchState(p, finalsResults[f.id], finalMaxGames(finalsResults));
-    if (st.status === 'confirmed') {
-      done += 1;
+    const st = skipped ? { status: 'skipped' } : finalMatchState(p, finals[f.id]);
+    if (st.status === 'done') {
+      decided += 1;
       const loser = st.winner === p.teamA ? p.teamB : p.teamA;
-      places.push({ place: f.places[0], teamId: st.winner, decided: true, score: [st.a, st.b], match: f.id });
-      places.push({ place: f.places[1], teamId: loser, decided: true, score: [st.a, st.b], match: f.id });
+      places.push({ place: f.places[0], teamId: st.winner, decided: true, by: 'final', score: [st.a, st.b], match: f.id });
+      places.push({ place: f.places[1], teamId: loser, decided: true, by: 'final', score: [st.a, st.b], match: f.id });
+    } else if (skipped || closed) {
+      decided += 1;
+      places.push({ place: f.places[0], teamId: p.teamA, decided: true, by: 'table', match: f.id });
+      places.push({ place: f.places[1], teamId: p.teamB, decided: true, by: 'table', match: f.id });
     } else {
       places.push({ place: f.places[0], teamId: null, decided: false, candidates: [p.teamA, p.teamB], match: f.id });
       places.push({ place: f.places[1], teamId: null, decided: false, candidates: [p.teamA, p.teamB], match: f.id });
     }
   }
   places.sort((x, y) => x.place - y.place);
-  return { complete: done === FINALS.length, places, pairings: fp, skipped: false };
+  return { complete: decided === FINALS.length, places, pairings: fp, skipped, closed };
 }
+
+// ---------- Zentraler Timer (gespeichert unter settings/timer, auf allen Geräten gleich) ----------
+
+const MIN = 60 * 1000;
+
+export function timerRemaining(timer, now) {
+  if (!timer) return null;
+  return timer.running ? Math.max(0, timer.endsAt - now) : Math.max(0, timer.remaining ?? 0);
+}
+
+export const timerOps = {
+  start: (phase, round, minutes, now = Date.now()) => {
+    const ms = Math.max(0, Math.round(minutes * MIN));
+    return { phase, round: round ?? null, running: true, endsAt: now + ms, remaining: ms, total: ms };
+  },
+  pause: (t, now = Date.now()) => ({ ...t, running: false, endsAt: null, remaining: Math.max(0, t.endsAt - now) }),
+  resume: (t, now = Date.now()) => ({ ...t, running: true, endsAt: now + (t.remaining || 0) }),
+  reset: (t) => ({ ...t, running: false, endsAt: null, remaining: t.total }),
+  adjust: (t, minutes, now = Date.now()) => {
+    const d = minutes * MIN;
+    if (t.running) return { ...t, endsAt: Math.max(now, t.endsAt + d), total: Math.max(0, t.total + d) };
+    return { ...t, remaining: Math.max(0, (t.remaining || 0) + d), total: Math.max(0, t.total + d) };
+  },
+};
 
 // ---------- Export ----------
 
-export function formatDiff(n) {
-  return signed(n);
+const csvCell = (v) => {
+  const s = String(v ?? '');
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const csv = (rows) => '﻿' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
+
+/** Alle Ergebnisse (Vorrunde und Platzierungsspiele) als CSV (Semikolon, für Excel). */
+export function resultsCsv(state) {
+  const { results = {}, finals = {}, manualTies = {}, settings = {} } = state;
+  const teams = resolveTeams(settings);
+  const byId = teamMap(teams);
+  const tl = timeline(resolveTimes(settings));
+  const rows = [['Phase', 'Runde', 'Uhrzeit', 'Court', 'Team A', 'Spieler A', 'Team B', 'Spieler B', 'Games A', 'Games B', 'Status', 'Hinweis']];
+  for (const m of SCHEDULE) {
+    const r = results[m.id];
+    const done = isConfirmedGroup(r);
+    rows.push([
+      'Vorrunde', m.round, tl.rounds[m.round - 1].from, m.court,
+      byId[m.home].name, byId[m.home].players.join(' & '), byId[m.away].name, byId[m.away].players.join(' & '),
+      done ? r.a : '', done ? r.b : '', done ? 'abgeschlossen' : 'offen', done && r.short ? 'Abbruch wegen Zeitmangel' : '',
+    ]);
+  }
+  const fp = finalPairings(results, manualTies, { teams });
+  if (fp.unlocked && finalsMode(settings) !== 'skip') {
+    for (const f of FINALS) {
+      const p = fp.pairings[f.id];
+      const st = finalMatchState(p, finals[f.id]);
+      const done = st.status === 'done';
+      rows.push([
+        f.label, '', tl.finals.from, f.court,
+        byId[p.teamA].name, byId[p.teamA].players.join(' & '), byId[p.teamB].name, byId[p.teamB].players.join(' & '),
+        done ? st.a : '', done ? st.b : '', done ? 'abgeschlossen' : 'offen', done && st.a === st.b ? `Sieger festgelegt: ${byId[st.winner].name}` : '',
+      ]);
+    }
+  }
+  return csv(rows);
 }
 
+/** Abschlusstabelle der Vorrunde plus endgültige Platzierung als CSV. */
+export function standingsCsv(state) {
+  const { results = {}, finals = {}, manualTies = {}, settings = {} } = state;
+  const teams = resolveTeams(settings);
+  const byId = teamMap(teams);
+  const st = computeStandings(results, { manualTies, teams });
+  const fr = finalRanking(results, finals, manualTies, settings, { teams });
+  const finalPlace = Object.fromEntries(fr.places.filter((p) => p.decided).map((p) => [p.teamId, p.place]));
+  const rows = [['Platz Vorrunde', 'Team', 'Spieler', 'Matches', 'Siege', 'Unentschieden', 'Niederlagen', 'Games gewonnen', 'Games verloren', 'Game-Differenz', 'Punkte', 'Endplatzierung']];
+  for (const r of st.rows) {
+    rows.push([`${r.rank}${r.tied ? '=' : ''}`, byId[r.teamId].name, byId[r.teamId].players.join(' & '), r.played, r.won, r.drawn, r.lost, r.gf, r.ga, r.diff, r.pts, finalPlace[r.teamId] ?? '']);
+  }
+  return csv(rows);
+}
+
+/** Lesbare Ergebnisliste (Text), z. B. zum Teilen per Messenger. */
 export function exportText(state) {
-  const { results = {}, finals = {}, manualTies = {} } = state;
-  const lines = [];
-  lines.push(`${TOURNAMENT.name} – ${TOURNAMENT.dateLabel}`);
-  lines.push('');
+  const { results = {}, finals = {}, manualTies = {}, settings = {} } = state;
+  const teams = resolveTeams(settings);
+  const byId = teamMap(teams);
+  const tl = timeline(resolveTimes(settings));
+  const lines = [`${TOURNAMENT.name} – ${TOURNAMENT.dateLabel} – ${TOURNAMENT.venue}`, ''];
   for (let r = 1; r <= ROUNDS; r++) {
-    lines.push(`Runde ${r} (${roundStartTime(r)} Uhr)`);
+    lines.push(`Runde ${r} (${tl.rounds[r - 1].from}–${tl.rounds[r - 1].to} Uhr)`);
     for (const m of SCHEDULE.filter((x) => x.round === r)) {
       const res = results[m.id];
-      const score = isConfirmedGroup(res) ? `${res.a}:${res.b}` : res && res.a != null ? `${res.a ?? '–'}:${res.b ?? '–'} (unbestätigt)` : 'offen';
-      lines.push(`  ${m.court}: ${TEAM_BY_ID[m.home].name} – ${TEAM_BY_ID[m.away].name}  ${score}`);
+      const score = isConfirmedGroup(res) ? `${res.a}:${res.b}${res.short ? ' (Abbruch)' : ''}` : 'offen';
+      lines.push(`  ${m.court}: ${byId[m.home].name} – ${byId[m.away].name}  ${score}`);
     }
-    if (r === TOURNAMENT.pauseAfterRound) lines.push(`Pause (${pauseTime().from}–${pauseTime().to} Uhr)`);
+    if (tl.pause && r === Number(resolveTimes(settings).pauseAfterRound)) lines.push(`Pause (${tl.pause.from}–${tl.pause.to} Uhr)`);
   }
   lines.push('');
-  const st = computeStandings(results, { manualTies });
-  lines.push('Vorrundentabelle (Pl. Team | Sp S U N | Games | Diff | Pkt)');
+  const st = computeStandings(results, { manualTies, teams });
+  lines.push('Tabelle (Pl. Team | Sp S U N | Games | Diff | Pkt)');
   for (const row of st.rows) {
-    lines.push(
-      `  ${row.rank}.${row.tied ? '=' : ''} ${row.team.name} | ${row.played} ${row.won} ${row.drawn} ${row.lost} | ${row.gf}:${row.ga} | ${signed(row.diff)} | ${row.pts}`,
-    );
+    lines.push(`  ${row.rank}.${row.tied ? '=' : ''} ${row.team.name} | ${row.played} ${row.won} ${row.drawn} ${row.lost} | ${row.gf}:${row.ga} | ${signed(row.diff)} | ${row.pts}`);
   }
-  const fr = finalRanking(results, finals, manualTies);
+  const fr = finalRanking(results, finals, manualTies, settings, { teams });
   if (fr.pairings.unlocked && !fr.skipped) {
-    lines.push('');
-    lines.push(`Platzierungsspiele (Best of ${finalMaxGames(finals)} Games)`);
+    lines.push('', 'Platzierungsspiele');
     for (const f of FINALS) {
       const p = fr.pairings.pairings[f.id];
-      const s = finalMatchState(p, finals[f.id], finalMaxGames(finals));
-      let score = 'offen';
-      if (s.status === 'confirmed') {
-        score = `${s.a}:${s.b}${s.a === s.b ? ` (Golden Point: ${TEAM_BY_ID[s.golden].name})` : ''}`;
-      }
-      lines.push(`  ${f.court} ${f.label}: ${TEAM_BY_ID[p.teamA].name} – ${TEAM_BY_ID[p.teamB].name}  ${score}`);
+      const s = finalMatchState(p, finals[f.id]);
+      const score = s.status === 'done' ? `${s.a}:${s.b}${s.a === s.b ? ` (Sieger: ${byId[s.winner].name})` : ''}` : 'nicht gespielt';
+      lines.push(`  ${f.court} ${f.label}: ${byId[p.teamA].name} – ${byId[p.teamB].name}  ${score}`);
     }
   }
   if (fr.complete) {
-    lines.push('');
-    lines.push(fr.skipped ? 'Endstand (Abschlusstabelle, ohne Platzierungsspiele)' : 'Endstand');
-    for (const p of fr.places) lines.push(`  ${p.place}. ${TEAM_BY_ID[p.teamId].name} (${TEAM_BY_ID[p.teamId].players.join(' & ')})`);
+    lines.push('', fr.skipped ? 'Endstand (Abschlusstabelle, ohne Platzierungsspiele)' : 'Endstand');
+    for (const p of fr.places) lines.push(`  ${p.place}. ${byId[p.teamId].name} (${byId[p.teamId].players.join(' & ')})`);
   }
   return lines.join('\n');
 }

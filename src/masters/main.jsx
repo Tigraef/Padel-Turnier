@@ -9,11 +9,14 @@ import '../ipad/ipad.css';
 import './masters.css';
 
 document.documentElement.lang = 'de';
+document.documentElement.setAttribute('data-theme', 'dark'); // Dunkelblau mit Gold – unabhängig von der Systemeinstellung
 
-const readOnly = /[?&]ansicht(=|&|$)/.test(window.location.search);
+const search = window.location.search;
+const readOnly = /[?&](ansicht|tv)(=|&|$)/.test(search);
+const tv = /[?&]tv(=|&|$)/.test(search);
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App readOnly={readOnly} />
+    <App readOnly={readOnly} tv={tv} />
   </StrictMode>,
 );

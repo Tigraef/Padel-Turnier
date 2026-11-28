@@ -30,7 +30,7 @@ export const DEFAULT_TEAMS = [
   { id: 't5', seed: 5, name: 'Netzfetzer', players: ['Lennart', 'Bendix'] },
   { id: 't6', seed: 6, name: 'Poco a Poco', players: ['Alex', 'Zara'] },
   { id: 't7', seed: 7, name: 'Die Osi’s', players: ['Bosi', 'Sophie'] },
-  { id: 't8', seed: 8, name: 'Der Schlägertrupp', players: ['Hannes', 'Max'] },
+  { id: 't8', seed: 8, name: 'Der Schlägertrupp', players: ['Nina', 'Max'] },
 ];
 export const TEAM_IDS = DEFAULT_TEAMS.map((t) => t.id);
 const SEED = Object.fromEntries(DEFAULT_TEAMS.map((t) => [t.id, t.seed]));
@@ -45,13 +45,13 @@ export const GROUP_GAMES = 8;
 
 // Verbindlicher Spielplan (Team-Nummern, Reihenfolge der Courts D6, D7, D8, D9).
 const FIXED = [
-  [[3, 6], [2, 7], [1, 8], [4, 5]],
-  [[8, 6], [3, 4], [1, 7], [2, 5]],
-  [[7, 5], [8, 4], [1, 6], [2, 3]],
-  [[6, 4], [7, 3], [1, 5], [8, 2]],
-  [[5, 3], [6, 2], [1, 4], [7, 8]],
-  [[4, 2], [5, 8], [1, 3], [6, 7]],
-  [[3, 8], [4, 7], [1, 2], [5, 6]],
+  [[7, 6], [2, 3], [1, 8], [4, 5]],
+  [[4, 2], [5, 8], [1, 7], [6, 3]],
+  [[3, 5], [8, 4], [1, 6], [2, 7]],
+  [[6, 4], [3, 7], [1, 5], [8, 2]],
+  [[5, 7], [6, 2], [1, 4], [3, 8]],
+  [[8, 6], [7, 4], [1, 3], [2, 5]],
+  [[7, 8], [4, 3], [1, 2], [5, 6]],
 ];
 
 export const SCHEDULE = FIXED.flatMap((round, r) =>

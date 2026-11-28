@@ -72,13 +72,13 @@ test('QS: die Lobster spielen sämtliche Vorrunden auf D8', () => {
 
 test('Spielplan entspricht exakt der Vorgabe', () => {
   const want = [
-    '3-6 2-7 1-8 4-5',
-    '8-6 3-4 1-7 2-5',
-    '7-5 8-4 1-6 2-3',
-    '6-4 7-3 1-5 8-2',
-    '5-3 6-2 1-4 7-8',
-    '4-2 5-8 1-3 6-7',
-    '3-8 4-7 1-2 5-6',
+    '7-6 2-3 1-8 4-5',
+    '4-2 5-8 1-7 6-3',
+    '3-5 8-4 1-6 2-7',
+    '6-4 3-7 1-5 8-2',
+    '5-7 6-2 1-4 3-8',
+    '8-6 7-4 1-3 2-5',
+    '7-8 4-3 1-2 5-6',
   ];
   for (let r = 1; r <= 7; r++) {
     const got = COURTS.map((c) => SCHEDULE.find((m) => m.round === r && m.court === c)).map((m) => `${nr(m.home)}-${nr(m.away)}`).join(' ');
@@ -143,25 +143,25 @@ test('QS: Tabellenberechnung (Punkte, Games, Differenz, Reihenfolge)', () => {
 
 test('Tabelle: Game-Differenz, gewonnene Games, direkter Vergleich, manuelle Entscheidung', () => {
   const r = {};
-  put(r, 't3', 't6', 6, 2); // t3 +4
-  put(r, 't2', 't7', 5, 3); // t2 +2
+  put(r, 't7', 't6', 6, 2); // t7 +4
+  put(r, 't4', 't5', 5, 3); // t4 +2
   let st = computeStandings(r, { upToRound: 1 });
-  assert.deepEqual(st.rows.slice(0, 2).map((x) => x.teamId), ['t3', 't2']);
+  assert.deepEqual(st.rows.slice(0, 2).map((x) => x.teamId), ['t7', 't4']);
   // Gleiche Punkte und Differenz, mehr Games: 5:3 nach Abbruch 4:2 vergleichen
   const r2 = {};
-  put(r2, 't3', 't6', 5, 3);
-  put(r2, 't2', 't7', 4, 2, { short: true });
+  put(r2, 't7', 't6', 5, 3);
+  put(r2, 't4', 't5', 4, 2, { short: true });
   st = computeStandings(r2, { upToRound: 1 });
-  assert.deepEqual(st.rows.slice(0, 2).map((x) => x.teamId), ['t3', 't2']);
+  assert.deepEqual(st.rows.slice(0, 2).map((x) => x.teamId), ['t7', 't4']);
   // Völlig gleich und noch kein direkter Vergleich → Turnierleitung entscheidet
   const r3 = {};
-  put(r3, 't3', 't6', 5, 3);
-  put(r3, 't2', 't7', 5, 3);
+  put(r3, 't7', 't6', 5, 3);
+  put(r3, 't4', 't5', 5, 3);
   st = computeStandings(r3, { upToRound: 1 });
-  assert.ok(st.unresolved.some((g) => g.ids.length === 2 && g.ids.includes('t2') && g.ids.includes('t3')));
-  const key = st.unresolved.find((g) => g.ids.includes('t2')).key;
-  const manual = computeStandings(r3, { upToRound: 1, manualTies: { [key]: ['t3', 't2'] } });
-  assert.deepEqual(manual.rows.slice(0, 2).map((x) => x.teamId), ['t3', 't2']);
+  assert.ok(st.unresolved.some((g) => g.ids.length === 2 && g.ids.includes('t4') && g.ids.includes('t7')));
+  const key = st.unresolved.find((g) => g.ids.includes('t4')).key;
+  const manual = computeStandings(r3, { upToRound: 1, manualTies: { [key]: ['t7', 't4'] } });
+  assert.deepEqual(manual.rows.slice(0, 2).map((x) => x.teamId), ['t7', 't4']);
 });
 
 test('QS: Ergebniskorrekturen aktualisieren die Tabelle', () => {

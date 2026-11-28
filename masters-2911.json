@@ -4,7 +4,8 @@
   "results/r1-D6": 1795707616418,
   "results/r1-D7": 1795707403989,
   "settings/rounds/1": 1795707358592,
-  "settings/timer": 1795707361625
+  "settings/timer": 1795707361625,
+  "settings/teams/t8": 1795877334796
  },
  "results": {},
  "finals": {},
@@ -21,7 +22,14 @@
    "endsAt": null,
    "remaining": 1200000,
    "total": 1200000
+  },
+  "teams/t8": {
+   "name": "Der Schlägertrupp",
+   "players": [
+    "Nina",
+    "Max"
+   ]
   }
  },
- "savedAt": "2026-11-26T15:40:16.525Z"
+ "savedAt": "2026-11-28T14:48:55.567Z"
 }
